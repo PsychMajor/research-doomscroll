@@ -152,6 +152,7 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
                             return range_papers
                         
                         batch = data["collection"]
+                        print(f"Got {len(batch)} papers from {start_date} (cursor=0)")
                         
                         # Filter papers by query terms
                         local_matches = 0
