@@ -470,6 +470,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     # Then continue fetching more in the background for caching
     if len(papers) >= 5 and topics:
         import random
+        import asyncio
         random.shuffle(papers)
         
         # Display first 5-20 papers immediately
@@ -482,7 +483,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         print(f"   - bioRxiv: {sum(1 for p in displayed_papers if p['source'] == 'bioRxiv')}")
         print(f"=" * 60)
         
-        # Cache the rest
+        # Cache the rest from quick fetch
         if len(papers) > len(displayed_papers):
             cached_papers = papers[len(displayed_papers):]
             semantic_papers_cache = [p for p in cached_papers if p['source'] == 'Semantic Scholar']
@@ -495,6 +496,61 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 "mixed": cached_papers
             }
             print(f"📦 Cached {len(cached_papers)} papers from quick fetch")
+        
+        # Start background task to fetch full 30 days and update cache
+        async def background_fetch():
+            try:
+                print(f"🔄 Background: Starting full 30-day fetch for caching...")
+                full_biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=100, quick_mode=False)
+                
+                # Filter out already rated papers
+                filtered_full = []
+                for paper in full_biorxiv_papers:
+                    if paper["paperId"] not in rated_paper_ids:
+                        filtered_full.append(paper)
+                
+                print(f"🔄 Background: Got {len(filtered_full)} papers from full 30-day search")
+                
+                # Combine with existing papers and remove duplicates
+                seen_ids = set(p["paperId"] for p in papers)
+                additional_papers = []
+                for paper in filtered_full:
+                    if paper["paperId"] not in seen_ids:
+                        additional_papers.append(paper)
+                        seen_ids.add(paper["paperId"])
+                
+                if additional_papers:
+                    print(f"🔄 Background: Found {len(additional_papers)} NEW papers from extended search")
+                    
+                    # Update cache with all papers (old + new)
+                    all_papers = papers + additional_papers
+                    random.shuffle(all_papers)
+                    
+                    # Remove the ones already displayed
+                    displayed_ids = set(p["paperId"] for p in displayed_papers)
+                    cacheable_papers = [p for p in all_papers if p["paperId"] not in displayed_ids]
+                    
+                    semantic_papers_cache = [p for p in cacheable_papers if p['source'] == 'Semantic Scholar']
+                    biorxiv_papers_cache = [p for p in cacheable_papers if p['source'] == 'bioRxiv']
+                    
+                    cache_key = f"{topics}_{authors}_{use_recommendations}"
+                    PAPER_CACHE[cache_key] = {
+                        "semantic_scholar": semantic_papers_cache,
+                        "biorxiv": biorxiv_papers_cache,
+                        "mixed": cacheable_papers
+                    }
+                    print(f"📦 Background: Updated cache with {len(cacheable_papers)} total papers")
+                    print(f"   📚 Semantic Scholar: {len(semantic_papers_cache)} papers")
+                    print(f"   🧬 bioRxiv: {len(biorxiv_papers_cache)} papers")
+                else:
+                    print(f"🔄 Background: No new papers found in extended search")
+                    
+            except Exception as e:
+                print(f"❌ Background fetch error: {e}")
+        
+        # Schedule background task without waiting for it
+        asyncio.create_task(background_fetch())
+        print(f"🔄 Background fetch scheduled (will continue after response)")
         
         return templates.TemplateResponse("index.html", {
             "request": request, 
