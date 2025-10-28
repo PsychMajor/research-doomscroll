@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Doomscroll</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>Research Doomscroll</h1>
+                    <p class="subtitle">Infinite scroll through research papers</p>
+                </div>
+                {% if topics or authors %}
+                <button class="collapse-toggle" onclick="toggleSearchForm()">
+                    <span class="toggle-icon" id="toggleIcon">▲</span>
+                </button>
+                {% endif %}
+            </div>
+            
+            {% if show_form %}
+            <div class="search-form-wrapper" id="searchFormWrapper">
+                <form class="search-form" method="POST" action="/profile/save">
+                <div class="profile-header">
+                    <div class="profile-info">
+                        <div>
+                            <h3>Your Research Profile</h3>
+                            <p class="profile-subtitle">Save your interests for a curated feed</p>
+                        </div>
+                    </div>
+                    {% if profile.topics or profile.authors %}
+                    <span class="profile-status">Profile Saved</span>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="topics">
+                        Topics & Keywords
+                    </label>
+                    <input 
+                        type="text" 
+                        id="topics" 
+                        name="topics" 
+                        placeholder="e.g., machine learning, neural networks, dopamine"
+                        value="{{ topics }}"
+                        class="form-input"
+                    >
+                    <span class="help-text">Enter research topics or keywords separated by commas</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="authors">
+                        Favorite Authors
+                    </label>
+                    <input 
+                        type="text" 
+                        id="authors" 
+                        name="authors" 
+                        placeholder="e.g., Geoffrey Hinton, Yann LeCun"
+                        value="{{ authors }}"
+                        class="form-input"
+                    >
+                    <span class="help-text">Enter author names separated by commas (optional)</span>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="search-btn">
+                        <span>Save Profile & Generate Feed</span>
+                    </button>
+                    {% if profile.topics or profile.authors %}
+                    <form method="POST" action="/profile/clear" style="display: inline;">
+                        <button type="submit" class="clear-btn">Clear Profile</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </form>
+            </div>
+            
+            {% if topics or authors %}
+            <div class="active-filters-wrapper">
+                <div class="active-filters-header">
+                    <span class="filter-label">Current feed:</span>
+                    {% if topics %}
+                    <span class="filter-tag">{{ topics }}</span>
+                    {% endif %}
+                    {% if authors %}
+                    <span class="filter-tag">{{ authors }}</span>
+                    {% endif %}
+                    <button class="filter-toggle" onclick="toggleFilters()" id="filterToggleBtn">
+                        <span id="filterToggleIcon">▼</span>
+                    </button>
+                </div>
+                <div class="active-filters-content" id="filtersContent">
+                    {% if feedback %}
+                    <span class="feedback-stats" id="feedbackStats">
+                        <span id="likedCount">{{ feedback.liked|length }}</span>&nbsp;liked · <span id="dislikedCount">{{ feedback.disliked|length }}</span>&nbsp;disliked
+                    </span>
+                    {% endif %}
+                    {% if feedback.liked|length > 0 %}
+                    <a href="/?use_recommendations=true&topics={{ topics }}&authors={{ authors }}" class="recommendations-btn">
+                        Get Recommendations
+                    </a>
+                    {% endif %}
+                    {% if feedback.liked|length > 0 or feedback.disliked|length > 0 %}
+                    <button onclick="showClearModal()" class="clear-feedback-btn" title="Clear feedback">
+                        Clear
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+        </header>
+
+    <script>
+        // Store search parameters from the server
+        const CURRENT_TOPICS = "{{ topics if topics else '' }}";
+        const CURRENT_AUTHORS = "{{ authors if authors else '' }}";
+        const USE_RECOMMENDATIONS = {{ 'true' if using_recommendations is defined and using_recommendations else 'false' }};
+        
+        console.log('Search params loaded:', { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS, useRec: USE_RECOMMENDATIONS });
+        
+        // Track liked and disliked papers
+        let likedPapers = new Set({{ feedback.liked | tojson }});
+        let dislikedPapers = new Set({{ feedback.disliked | tojson }});
+
+        // Track which cards have been logged as visible
+            const loggedCards = new Set();
+            
+            // Global observer for visibility tracking
+            let observer = null;
+
+            // Auto-collapse the form on page load if we have results
+            window.addEventListener('DOMContentLoaded', function() {
+                const hasPapers = {{ 'true' if papers else 'false' }};
+                const hasTopicsOrAuthors = {{ 'true' if topics or authors else 'false' }};
+                
+                if (hasPapers && hasTopicsOrAuthors) {
+                    const wrapper = document.getElementById('searchFormWrapper');
+                    const icon = document.getElementById('toggleIcon');
+                    if (wrapper) {
+                        wrapper.classList.add('collapsed');
+                        if (icon) icon.textContent = '▼';
+                    }
+                }
+
+                // Mark already rated papers
+                likedPapers.forEach(paperId => {
+                    const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
+                    if (btn) {
+                        btn.classList.add('active');
+                        btn.querySelector('.like-text').textContent = 'Liked!';
+                    }
+                });
+
+                dislikedPapers.forEach(paperId => {
+                    const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
+                    if (btn) {
+                        const card = btn.closest('.paper-card');
+                        card.style.opacity = '0.3';
+                    }
+                });
+
+                // Set up Intersection Observer to track card visibility
+                const observerOptions = {
+                    root: null, // viewport
+                    rootMargin: '0px',
+                    threshold: 1.0 // 100% visible
+                };
+
+                observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting && entry.intersectionRatio >= 1.0) {
+                            const card = entry.target;
+                            const cardNumber = card.dataset.cardNumber;
+                            const paperId = card.dataset.paperId;
+                            
+                            // Only log once per card
+                            if (!loggedCards.has(cardNumber)) {
+                                loggedCards.add(cardNumber);
+                                logCardVisible(cardNumber, paperId);
+                            }
+                        }
+                    });
+                }, observerOptions);
+
+                // Observe all paper cards
+                document.querySelectorAll('.paper-card').forEach(card => {
+                    observer.observe(card);
+                });
+            });
+
+            async function logCardVisible(cardNumber, paperId) {
+                try {
+                    const formData = new FormData();
+                    formData.append('card_number', cardNumber);
+                    formData.append('paper_id', paperId);
+                    
+                    await fetch('/card/visible', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } catch (error) {
+                    console.error('Error logging card visibility:', error);
+                }
+            }
+
+            function updateFeedbackStats() {
+                const likedCountEl = document.getElementById('likedCount');
+                const dislikedCountEl = document.getElementById('dislikedCount');
+                
+                if (likedCountEl) likedCountEl.textContent = likedPapers.size;
+                if (dislikedCountEl) dislikedCountEl.textContent = dislikedPapers.size;
+            }
+
+            function toggleSearchForm() {
+                const wrapper = document.getElementById('searchFormWrapper');
+                const icon = document.getElementById('toggleIcon');
+                
+                if (wrapper.classList.contains('collapsed')) {
+                    wrapper.classList.remove('collapsed');
+                    icon.textContent = '▲';
+                } else {
+                    wrapper.classList.add('collapsed');
+                    icon.textContent = '▼';
+                }
+            }
+
+        function toggleFeed() {
+            const feedContainer = document.getElementById('feedContainer');
+            const icon = document.getElementById('feedToggleIcon');
+            const toggleBtn = document.getElementById('feedToggleBtn');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
+            
+            feedContainer.classList.toggle('collapsed');
+            
+            if (feedContainer.classList.contains('collapsed')) {
+                icon.textContent = '▶';
+                toggleBtn.classList.add('collapsed');
+                if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+            } else {
+                icon.textContent = '▼';
+                toggleBtn.classList.remove('collapsed');
+                if (loadMoreContainer) loadMoreContainer.style.display = 'flex';
+            }
+        }
+
+        function toggleFilters() {
+            const filtersContent = document.getElementById('filtersContent');
+            const icon = document.getElementById('filterToggleIcon');
+            const toggleBtn = document.getElementById('filterToggleBtn');
+            
+            filtersContent.classList.toggle('collapsed');
+            
+            if (filtersContent.classList.contains('collapsed')) {
+                icon.textContent = '▶';
+                toggleBtn.classList.add('collapsed');
+            } else {
+                icon.textContent = '▼';
+                toggleBtn.classList.remove('collapsed');
+            }
+        }
+
+        async function likePaper(paperId, event) {
+                try {
+                    const btn = event.target.closest('.like-btn');
+                    const card = btn.closest('.paper-card');
+                    
+                    // Check if already liked - if so, unlike it
+                    if (likedPapers.has(paperId)) {
+                        // Unlike the paper
+                        const formData = new FormData();
+                        formData.append('paper_id', paperId);
+                        
+                        const response = await fetch('/paper/unlike', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            likedPapers.delete(paperId);
+                            btn.classList.remove('active');
+                            btn.querySelector('.like-text').textContent = 'Like';
+                            btn.disabled = false;
+                            card.style.opacity = '1';
+                            card.style.transform = 'translateX(0)';
+                            updateFeedbackStats();
+                        }
+                    } else {
+                        // Like the paper
+                        const formData = new FormData();
+                        formData.append('paper_id', paperId);
+                        
+                        const response = await fetch('/paper/like', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            // Remove from disliked if present
+                            if (dislikedPapers.has(paperId)) {
+                                dislikedPapers.delete(paperId);
+                            }
+                            
+                            likedPapers.add(paperId);
+                            btn.classList.add('active');
+                            btn.querySelector('.like-text').textContent = 'Liked!';
+                            card.style.opacity = '1';
+                            card.style.transform = 'translateX(0)';
+                            updateFeedbackStats();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error with like/unlike:', error);
+                }
+            }
+
+            async function dislikePaper(paperId, event) {
+                try {
+                    const btn = event.target.closest('.dislike-btn');
+                    const card = btn.closest('.paper-card');
+                    
+                    // Check if already disliked - if so, undislike it
+                    if (dislikedPapers.has(paperId)) {
+                        // Undislike the paper
+                        const formData = new FormData();
+                        formData.append('paper_id', paperId);
+                        
+                        const response = await fetch('/paper/undislike', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            dislikedPapers.delete(paperId);
+                            btn.classList.remove('active');
+                            card.style.opacity = '1';
+                            card.style.transform = 'translateX(0)';
+                            updateFeedbackStats();
+                        }
+                    } else {
+                        // Dislike the paper
+                        const formData = new FormData();
+                        formData.append('paper_id', paperId);
+                        
+                        const response = await fetch('/paper/dislike', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            // Remove from liked if present
+                            if (likedPapers.has(paperId)) {
+                                likedPapers.delete(paperId);
+                                const likeBtn = card.querySelector('.like-btn');
+                                if (likeBtn) {
+                                    likeBtn.classList.remove('active');
+                                    likeBtn.querySelector('.like-text').textContent = 'Like';
+                                }
+                            }
+                            
+                            dislikedPapers.add(paperId);
+                            btn.classList.add('active');
+                            card.style.opacity = '0.3';
+                            card.style.transform = 'translateX(-20px)';
+                            updateFeedbackStats();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error with dislike/undislike:', error);
+                }
+            }
+
+            function toggleAbstract(paperId) {
+                const abstractDiv = document.getElementById(`abstract-${paperId}`);
+                const toggleButton = abstractDiv.parentElement.querySelector('.abstract-toggle');
+                const icon = toggleButton.querySelector('.toggle-icon');
+                
+                if (abstractDiv.style.display === 'none') {
+                    abstractDiv.style.display = 'block';
+                    icon.textContent = '▼';
+                    toggleButton.classList.add('expanded');
+                } else {
+                    abstractDiv.style.display = 'none';
+                    icon.textContent = '▶';
+                    toggleButton.classList.remove('expanded');
+                }
+            }
+
+            function showClearModal() {
+                document.getElementById('clearModal').style.display = 'flex';
+            }
+
+            function closeClearModal() {
+                document.getElementById('clearModal').style.display = 'none';
+            }
+
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                const modal = document.getElementById('clearModal');
+                if (event.target === modal) {
+                    closeClearModal();
+                }
+            }
+
+            function openSidebar(url, title) {
+                const sidebar = document.getElementById('paperSidebar');
+                const iframe = document.getElementById('paperFrame');
+                const titleEl = document.getElementById('sidebarTitle');
+                const overlay = document.getElementById('sidebarOverlay');
+                
+                // Use our proxy to bypass X-Frame-Options
+                const proxyUrl = `/proxy?url=${encodeURIComponent(url)}`;
+                
+                titleEl.textContent = title;
+                iframe.src = proxyUrl;
+                sidebar.classList.add('active');
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeSidebar() {
+                const sidebar = document.getElementById('paperSidebar');
+                const iframe = document.getElementById('paperFrame');
+                const overlay = document.getElementById('sidebarOverlay');
+                
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                iframe.src = '';
+                document.body.style.overflow = 'auto';
+            }
+
+            async function loadMorePapers() {
+                const btn = document.getElementById('loadMoreBtn');
+                const btnText = btn.querySelector('.load-more-text');
+                const btnIcon = btn.querySelector('.load-more-icon');
+                
+                // Show loading state
+                btn.disabled = true;
+                btnText.textContent = 'Loading...';
+                btnIcon.textContent = '⟳';
+                btnIcon.style.animation = 'spin 1s linear infinite';
+                
+                try {
+                    // Use the stored search parameters instead of URL params
+                    const topics = CURRENT_TOPICS;
+                    const authors = CURRENT_AUTHORS;
+                    const useRecommendations = USE_RECOMMENDATIONS;
+                    
+                    // Build the API URL
+                    let apiUrl = '/api/load-more?';
+                    if (topics) apiUrl += `topics=${encodeURIComponent(topics)}&`;
+                    if (authors) apiUrl += `authors=${encodeURIComponent(authors)}&`;
+                    if (useRecommendations) apiUrl += `use_recommendations=${useRecommendations}&`;
+                    
+                    console.log('Load More API URL:', apiUrl);
+                    
+                    // Fetch new papers
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    console.log('Load More Response:', data);
+                    console.log('Papers count:', data.papers ? data.papers.length : 0);
+                    console.log('From cache:', data.from_cache);
+                    
+                    if (data.papers && data.papers.length > 0) {
+                        // Get the feed container
+                        const feed = document.querySelector('.feed');
+                        
+                        console.log('Feed element found:', !!feed);
+                        
+                        // Get current card count for numbering
+                        const currentCardCount = document.querySelectorAll('.paper-card').length;
+                        
+                        // Append each new paper
+                        data.papers.forEach((paper, index) => {
+                            const cardNumber = currentCardCount + index + 1;
+                            const cardHtml = createPaperCard(paper, cardNumber);
+                            feed.insertAdjacentHTML('beforeend', cardHtml);
+                        });
+                        
+                        // Set up observers for new cards
+                        const newCards = feed.querySelectorAll('.paper-card:not([data-observed])');
+                        newCards.forEach(card => {
+                            card.setAttribute('data-observed', 'true');
+                            observer.observe(card);
+                        });
+                        
+                        // Reset button state
+                        btn.disabled = false;
+                        btnText.textContent = 'Load More Papers';
+                        btnIcon.textContent = '↓';
+                        btnIcon.style.animation = '';
+                        
+                        console.log(`Loaded ${data.papers.length} new papers`);
+                    } else {
+                        // No more papers
+                        btnText.textContent = 'No More Papers';
+                        btnIcon.textContent = '✓';
+                        btnIcon.style.animation = '';
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btnText.textContent = 'Load More Papers';
+                            btnIcon.textContent = '↓';
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.error('Error loading more papers:', error);
+                    btn.disabled = false;
+                    btnText.textContent = 'Error - Try Again';
+                    btnIcon.textContent = '⚠';
+                    btnIcon.style.animation = '';
+                    setTimeout(() => {
+                        btnText.textContent = 'Load More Papers';
+                        btnIcon.textContent = '↓';
+                    }, 3000);
+                }
+            }
+
+            function createPaperCard(paper, cardNumber) {
+                const isLiked = likedPapers.has(paper.paperId);
+                const isDisliked = dislikedPapers.has(paper.paperId);
+                
+                const authorsHtml = paper.authors && paper.authors.length > 0 
+                    ? `<span class="authors">
+                        ${paper.authors.slice(0, 3).map(a => a.name).join(', ')}
+                        ${paper.authors.length > 3 ? `<span class="more-authors">+${paper.authors.length - 3} more</span>` : ''}
+                       </span>
+                       <span class="separator">•</span>`
+                    : '';
+                
+                const venueHtml = paper.venue 
+                    ? `<span class="separator">•</span><span class="venue">${paper.venue}</span>`
+                    : '';
+                
+                const citationsHtml = paper.citationCount > 0 
+                    ? `<span class="separator">•</span><span class="citations">${paper.citationCount} citations</span>`
+                    : '';
+                
+                const tldrHtml = paper.tldr 
+                    ? `<div class="paper-tldr"><strong>TL;DR:</strong> ${paper.tldr}</div>`
+                    : '';
+                
+                const linkText = paper.source === 'bioRxiv' ? 'Read on bioRxiv' : 'Read on Semantic Scholar';
+                
+                return `
+                    <article class="paper-card" data-card-number="${cardNumber}" data-paper-id="${paper.paperId}" data-observed="true">
+                        <div class="card-header">
+                            <div class="paper-meta">
+                                <h2 class="paper-title">${paper.title}</h2>
+                                <div class="paper-info">
+                                    ${authorsHtml}
+                                    <span class="year">${paper.year}</span>
+                                    ${venueHtml}
+                                    ${citationsHtml}
+                                    <span class="separator">•</span>
+                                    <span class="source-badge">${paper.source}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${tldrHtml}
+                        <div class="paper-abstract-container">
+                            <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
+                                <span class="toggle-icon">▶</span>
+                                <span class="toggle-text">Abstract</span>
+                            </button>
+                            <div class="paper-abstract" id="abstract-${paper.paperId}" style="display: none;">
+                                ${paper.abstract || '<em class="no-abstract">No abstract available</em>'}
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <a href="${paper.url}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                                <span>${linkText}</span>
+                                <span class="link-icon">↗</span>
+                            </a>
+                            <div class="card-actions">
+                                <button class="like-btn ${isLiked ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
+                                    <span class="like-text">${isLiked ? 'Liked!' : 'Like'}</span>
+                                </button>
+                                <button class="dislike-btn ${isDisliked ? 'active' : ''}" onclick="dislikePaper('${paper.paperId}', event)" title="Dislike this paper">
+                                    <span class="dislike-text">Pass</span>
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }
+        </script>
+
+        <!-- Paper Sidebar -->
+        <div id="paperSidebar" class="paper-sidebar">
+            <div class="sidebar-header">
+                <h3 id="sidebarTitle" class="sidebar-title">Loading...</h3>
+                <button class="sidebar-close" onclick="closeSidebar()">&times;</button>
+            </div>
+            <iframe id="paperFrame" class="sidebar-iframe"></iframe>
+        </div>
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+
+        {% if error %}
+        <div class="error-banner">
+            <div class="error-icon">!</div>
+            <div class="error-content">
+                <h3>Unable to Load Papers</h3>
+                <p>{{ error }}</p>
+                <button onclick="location.reload()" class="retry-btn">Retry</button>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if info_message %}
+        <div class="info-banner">
+            <div class="info-content">
+                <p>{{ info_message }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if using_recommendations %}
+        <div class="recommendations-banner">
+            <div class="banner-icon">*</div>
+            <div class="banner-content">
+                <h3>Personalized Recommendations</h3>
+                <p>These papers are recommended based on your liked papers</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if papers %}
+        <div class="feed-header">
+            <h2 class="feed-title">Research Feed</h2>
+            <button class="feed-toggle" onclick="toggleFeed()" id="feedToggleBtn">
+                <span class="toggle-icon" id="feedToggleIcon">▼</span>
+            </button>
+        </div>
+        {% endif %}
+
+        <div class="feed" id="feedContainer">
+            {% for paper in papers %}
+            <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}">
+                <div class="card-header">
+                    <div class="paper-meta">
+                        <h2 class="paper-title">{{ paper.title }}</h2>
+                        <div class="paper-info">
+                            {% if paper.authors %}
+                            <span class="authors">
+                                {% for author in paper.authors[:3] %}
+                                    {{ author.name }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if paper.authors|length > 3 %}
+                                    <span class="more-authors">+{{ paper.authors|length - 3 }} more</span>
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            <span class="separator">•</span>
+                            <span class="year">{{ paper.year }}</span>
+                            {% if paper.venue %}
+                            <span class="separator">•</span>
+                            <span class="venue">{{ paper.venue }}</span>
+                            {% endif %}
+                            {% if paper.citationCount > 0 %}
+                            <span class="separator">•</span>
+                            <span class="citations">{{ paper.citationCount }} citations</span>
+                            {% endif %}
+                            {% if paper.source %}
+                            <span class="separator">•</span>
+                            <span class="source-badge">{{ paper.source }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if paper.tldr %}
+                <div class="paper-tldr">
+                    <strong>TL;DR:</strong> {{ paper.tldr }}
+                </div>
+                {% endif %}
+
+                <div class="paper-abstract-container">
+                    <button class="abstract-toggle" onclick="toggleAbstract('{{ paper.paperId }}')">
+                        <span class="toggle-icon">▶</span>
+                        <span class="toggle-text">Abstract</span>
+                    </button>
+                    <div class="paper-abstract" id="abstract-{{ paper.paperId }}" style="display: none;">
+                        {% if paper.abstract %}
+                            {{ paper.abstract }}
+                        {% else %}
+                            <em class="no-abstract">No abstract available</em>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    {% if paper.url %}
+                    {% if paper.source == 'bioRxiv' %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on bioRxiv</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% else %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on Semantic Scholar</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% endif %}
+                    {% endif %}
+                    <div class="card-actions">
+                        <button class="like-btn" onclick="likePaper('{{ paper.paperId }}', event)" title="Like this paper">
+                            <span class="like-text">Like</span>
+                        </button>
+                        <button class="dislike-btn" onclick="dislikePaper('{{ paper.paperId }}', event)" title="Dislike this paper">
+                            <span class="dislike-text">Pass</span>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        {% if not papers %}
+        <div class="empty-state">
+            {% if not topics and not authors %}
+            <div class="empty-icon">→</div>
+            <h2>Start Your Research Journey</h2>
+            <p>Enter your research interests and favorite authors above to generate a personalized feed of papers</p>
+            {% else %}
+            <div class="empty-icon">?</div>
+            <h2>No papers found</h2>
+            <p>Try adjusting your search topics or authors</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Load More Button - outside the collapsible feed -->
+    {% if papers %}
+    <div class="load-more-container" id="loadMoreContainer">
+        <button onclick="loadMorePapers()" class="load-more-btn" id="loadMoreBtn">
+            <span class="load-more-text">Load More Papers</span>
+            <span class="load-more-icon">↓</span>
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- Clear Feedback Modal -->
+    <div id="clearModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Clear Feedback</h3>
+                <button class="modal-close" onclick="closeClearModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>What would you like to clear?</p>
+                <div class="modal-actions">
+                    <form method="POST" action="/feedback/clear/liked" style="width: 100%;">
+                        <button type="submit" class="modal-btn clear-liked-btn">
+                            Clear Liked ({{ feedback.liked|length if feedback else 0 }})
+                        </button>
+                    </form>
+                    <form method="POST" action="/feedback/clear/disliked" style="width: 100%;">
+                        <button type="submit" class="modal-btn clear-disliked-btn">
+                            Clear Disliked ({{ feedback.disliked|length if feedback else 0 }})
+                        </button>
+                    </form>
+                    <form method="POST" action="/feedback/clear" style="width: 100%;">
+                        <button type="submit" class="modal-btn clear-all-btn">
+                            Clear All Feedback
+                        </button>
+                    </form>
+                </div>
+                <button onclick="closeClearModal()" class="modal-btn cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
