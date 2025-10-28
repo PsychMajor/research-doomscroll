@@ -110,8 +110,14 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
-async def fetch_biorxiv_papers(query_terms, max_results=20):
-    """Fetch papers from bioRxiv API - only fetches cursor=0 (first 100 papers) from each day"""
+async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
+    """Fetch papers from bioRxiv API - only fetches cursor=0 (first 100 papers) from each day
+    
+    Args:
+        query_terms: Search terms
+        max_results: Maximum number of papers to return
+        quick_mode: If True, only search recent days for faster initial results
+    """
     import asyncio
     import aiohttp
     from datetime import datetime, timedelta
@@ -122,16 +128,22 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
         # Shared counter for progress reporting
         match_counter = {"count": 0, "lock": asyncio.Lock()}
         
-        # Split into 30 individual days for maximum parallelization
+        # Split into days for parallelization
         now = datetime.now()
         date_ranges = []
-        for i in range(30):
+        
+        # In quick mode, only search last 10 days for faster response
+        num_days = 10 if quick_mode else 30
+        
+        for i in range(num_days):
             day = now - timedelta(days=i)
             # Each range is a single day
             date_str = day.strftime("%Y-%m-%d")
             date_ranges.append((date_str, date_str))
         
         print(f"Fetching bioRxiv papers from {len(date_ranges)} days in parallel (cursor=0 only)")
+        if quick_mode:
+            print("⚡ Quick mode: Searching recent days only for faster results")
         
         async def fetch_date_range(session, start_date, end_date, semaphore):
             """Fetch only cursor=0 for a specific date"""
@@ -442,12 +454,65 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         semantic_error = f"Semantic Scholar connection error, showing bioRxiv papers only."
     
     # Always try to fetch from bioRxiv (regardless of Semantic Scholar status)
-    # Fetch MORE than we need so we can cache extras for "Load More"
-    if topics:
+    # For quick initial display: first do a quick search of recent papers
+    if topics and len(papers) < 5:
+        print(f"⚡ Quick fetch: Getting recent bioRxiv papers for fast display...")
+        quick_biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=20, quick_mode=True)
+        
+        # Filter out already rated papers
+        for paper in quick_biorxiv_papers:
+            if paper["paperId"] not in rated_paper_ids:
+                papers.append(paper)
+        
+        print(f"⚡ Quick fetch complete: {len(papers)} papers ready to display")
+    
+    # If we have at least 5 papers, we can return immediately for fast display
+    # Then continue fetching more in the background for caching
+    if len(papers) >= 5 and topics:
+        import random
+        random.shuffle(papers)
+        
+        # Display first 5-20 papers immediately
+        displayed_papers = papers[:min(20, len(papers))]
+        
+        print(f"🚀 FAST DISPLAY: Showing {len(displayed_papers)} papers immediately")
+        print(f"=" * 60)
+        print(f"📄 LOADING {len(displayed_papers)} CARDS ON PAGE")
+        print(f"   - Semantic Scholar: {sum(1 for p in displayed_papers if p['source'] == 'Semantic Scholar')}")
+        print(f"   - bioRxiv: {sum(1 for p in displayed_papers if p['source'] == 'bioRxiv')}")
+        print(f"=" * 60)
+        
+        # Cache the rest
+        if len(papers) > len(displayed_papers):
+            cached_papers = papers[len(displayed_papers):]
+            semantic_papers_cache = [p for p in cached_papers if p['source'] == 'Semantic Scholar']
+            biorxiv_papers_cache = [p for p in cached_papers if p['source'] == 'bioRxiv']
+            
+            cache_key = f"{topics}_{authors}_{use_recommendations}"
+            PAPER_CACHE[cache_key] = {
+                "semantic_scholar": semantic_papers_cache,
+                "biorxiv": biorxiv_papers_cache,
+                "mixed": cached_papers
+            }
+            print(f"📦 Cached {len(cached_papers)} papers from quick fetch")
+        
+        return templates.TemplateResponse("index.html", {
+            "request": request, 
+            "papers": displayed_papers,
+            "show_form": True,
+            "topics": topics,
+            "authors": authors,
+            "profile": profile,
+            "feedback": feedback,
+            "info_message": semantic_error
+        })
+    
+    # Otherwise, do a full fetch if we don't have enough papers yet
+    if topics and len(papers) < 20:
         print(f"Fetching bioRxiv papers for topics: {topics}")
         # Fetch many more papers to have extras for caching (fetch up to 100 from bioRxiv)
         fetch_limit = 100
-        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit)
+        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit, quick_mode=False)
         
         # Filter out already rated papers - but DON'T limit here, collect them all
         filtered_biorxiv = []
