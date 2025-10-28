@@ -119,6 +119,9 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
     try:
         print(f"Searching bioRxiv for terms: {query_terms}")
         
+        # Shared counter for progress reporting
+        match_counter = {"count": 0, "lock": asyncio.Lock()}
+        
         # Split into 30 individual days for maximum parallelization
         now = datetime.now()
         date_ranges = []
@@ -149,9 +152,9 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
                             return range_papers
                         
                         batch = data["collection"]
-                        print(f"Got {len(batch)} papers from {start_date} (cursor=0)")
                         
                         # Filter papers by query terms
+                        local_matches = 0
                         for paper_data in batch:
                             title = paper_data.get("title", "").lower()
                             abstract = paper_data.get("abstract", "").lower()
@@ -165,6 +168,8 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
                                     break
                             
                             if matches:
+                                local_matches += 1
+                                
                                 # Extract author names
                                 authors = []
                                 if paper_data.get("authors"):
@@ -193,6 +198,19 @@ async def fetch_biorxiv_papers(query_terms, max_results=20):
                                     "source": "bioRxiv"
                                 }
                                 range_papers.append(paper)
+                        
+                        # Update counter and report progress every 5 matches
+                        async with match_counter["lock"]:
+                            old_count = match_counter["count"]
+                            match_counter["count"] += local_matches
+                            new_count = match_counter["count"]
+                            
+                            # Report every 5 papers
+                            old_milestone = old_count // 5
+                            new_milestone = new_count // 5
+                            
+                            if new_milestone > old_milestone:
+                                print(f"🔍 Progress: {new_count} matching papers found so far...")
                         
                 except asyncio.TimeoutError:
                     print(f"Timeout fetching {start_date} to {end_date}")
