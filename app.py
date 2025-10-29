@@ -265,7 +265,7 @@ async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None)
                         all_page_tasks.append(fetch_single_page(session, date_str, cursor, semaphore))
                         total_pages += 1
             
-            print(f"🔍 Step 2: Fetching {total_pages} additional pages (cursors > 100) across 30 days...")
+            print(f"🔍 Step 2: Fetching {total_pages} additional pages (cursors >= 100) across 30 days...")
             
             if total_pages == 0:
                 print(f"✅ DEEP SEARCH: No additional pages needed (all dates have ≤100 papers)")
