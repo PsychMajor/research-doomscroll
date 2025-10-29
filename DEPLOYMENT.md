@@ -141,8 +141,14 @@ All options support auto-deployment:
 1. ✅ Test the live URL
 2. ✅ Check that NLTK downloads work
 3. ✅ Test paper search functionality
-4. ✅ Test like/dislike persistence
-5. ✅ Monitor logs for any errors
+4. ✅ **Like some papers** to enable the "Get Recommendations" button
+5. ✅ Check that TL;DR summaries appear on papers
+6. ✅ Monitor logs for any errors
+
+### Important Notes:
+- **"Get Recommendations" button**: Only appears after you've liked at least 1 paper
+- **TL;DR summaries**: Generated automatically for bioRxiv papers; Semantic Scholar papers may have their own TL;DR
+- **Likes/Dislikes**: Stored in `/tmp` on free tier - will reset when app restarts
 
 ---
 

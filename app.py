@@ -54,10 +54,24 @@ DEEP_SEARCH_DATES = {}
 # Download NLTK data on startup
 try:
     import nltk
-    nltk.download('punkt', quiet=True)
-    nltk.download('punkt_tab', quiet=True)
-    nltk.download('stopwords', quiet=True)
-except:
+    import ssl
+    
+    # Try to download with SSL verification disabled (for some cloud environments)
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+    
+    # Set download directory to /tmp for cloud deployments
+    nltk.data.path.append('/tmp/nltk_data')
+    nltk.download('punkt', quiet=True, download_dir='/tmp/nltk_data')
+    nltk.download('punkt_tab', quiet=True, download_dir='/tmp/nltk_data')
+    nltk.download('stopwords', quiet=True, download_dir='/tmp/nltk_data')
+    print("✅ NLTK data downloaded successfully")
+except Exception as e:
+    print(f"⚠️  NLTK download warning: {e}")
     pass
 
 def generate_tldr(abstract):
@@ -85,7 +99,14 @@ def generate_tldr(abstract):
             return str(summary[0])
         return None
     except Exception as e:
-        print(f"Error generating TLDR: {e}")
+        print(f"⚠️  Error generating TLDR: {e}")
+        # Fallback: return first sentence if TLDR generation fails
+        try:
+            sentences = abstract.split('. ')
+            if sentences and len(sentences[0]) > 20:
+                return sentences[0] + '.'
+        except:
+            pass
         return None
 
 def load_profile():
