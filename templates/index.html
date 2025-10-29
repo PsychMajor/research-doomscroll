@@ -182,6 +182,14 @@
                             if (!loggedCards.has(paperId)) {
                                 loggedCards.add(paperId);
                                 logCardVisible(cardNumber, paperId);
+                                
+                                // Check if this is the second-to-last card
+                                const allCards = document.querySelectorAll('.paper-card');
+                                const currentIndex = Array.from(allCards).indexOf(card);
+                                if (currentIndex === allCards.length - 2) {
+                                    console.log(`🔔 SECOND-TO-LAST CARD: Viewing card #${cardNumber} (${currentIndex + 1} of ${allCards.length})`);
+                                    logSecondToLastCard(cardNumber, paperId, allCards.length);
+                                }
                             }
                         }
                     });
@@ -205,6 +213,22 @@
                     });
                 } catch (error) {
                     console.error('Error logging card visibility:', error);
+                }
+            }
+
+            async function logSecondToLastCard(cardNumber, paperId, totalCards) {
+                try {
+                    const formData = new FormData();
+                    formData.append('card_number', cardNumber);
+                    formData.append('paper_id', paperId);
+                    formData.append('total_cards', totalCards);
+                    
+                    await fetch('/card/second-to-last', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } catch (error) {
+                    console.error('Error logging second-to-last card:', error);
                 }
             }
 

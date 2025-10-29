@@ -1549,6 +1549,12 @@ async def log_card_visible(card_number: str = Form(...), paper_id: str = Form(..
     print(f"👁️  Card #{card_number} is now visible (Paper ID: {paper_id})")
     return {"status": "success"}
 
+@app.post("/card/second-to-last")
+async def log_second_to_last_card(card_number: str = Form(...), paper_id: str = Form(...), total_cards: str = Form(...)):
+    """Log when user views the second-to-last card"""
+    print(f"🔔 SECOND-TO-LAST CARD: User viewing card #{card_number} (Paper ID: {paper_id}) - {int(total_cards)-1} of {total_cards} cards")
+    return {"status": "success"}
+
 @app.get("/proxy")
 async def proxy_url(url: str):
     """Proxy external URLs to bypass X-Frame-Options"""
