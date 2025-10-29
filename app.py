@@ -155,62 +155,77 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
                 try:
                     async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                         if response.status != 200:
-                            print(f"bioRxiv returned {response.status} for {start_date} to {end_date}")
+                            print(f"❌ ERROR: bioRxiv returned status {response.status} for {start_date}")
+                            print(f"   URL: {url}")
                             return range_papers
                         
                         data = await response.json()
                         
                         if "collection" not in data or not data["collection"]:
+                            print(f"⚠️  WARNING: No collection data for {start_date}")
                             return range_papers
                         
                         batch = data["collection"]
-                        print(f"Got {len(batch)} papers from {start_date} (cursor=0)")
+                        print(f"✅ Got {len(batch)} papers from {start_date} (cursor=0)")
                         
                         # Filter papers by query terms
                         local_matches = 0
                         for paper_data in batch:
-                            title = paper_data.get("title", "").lower()
-                            abstract = paper_data.get("abstract", "").lower()
+                            try:
+                                title = paper_data.get("title", "").lower()
+                                abstract = paper_data.get("abstract", "").lower()
+                                
+                                # Check if any query term matches
+                                matches = False
+                                for term in query_terms.split(","):
+                                    term_clean = term.strip().lower()
+                                    if term_clean and (term_clean in title or term_clean in abstract):
+                                        matches = True
+                                        break
+                                
+                                if matches:
+                                    local_matches += 1
+                                    
+                                    # Extract author names
+                                    authors = []
+                                    if paper_data.get("authors"):
+                                        author_str = paper_data.get("authors", "")
+                                        author_names = author_str.split(";")
+                                        authors = [{"name": name.strip()} for name in author_names if name.strip()]
+                                    
+                                    # Create paper ID from DOI
+                                    doi = paper_data.get("doi", "")
+                                    if not doi:
+                                        print(f"⚠️  WARNING: Paper missing DOI: {title[:50]}")
+                                        continue
+                                    
+                                    paper_id = f"biorxiv_{doi.replace('/', '_')}"
+                                    
+                                    # Generate TLDR from abstract
+                                    abstract_text = paper_data.get("abstract", "No abstract available")
+                                    tldr_text = None
+                                    try:
+                                        tldr_text = generate_tldr(abstract_text) if abstract_text != "No abstract available" else None
+                                    except Exception as tldr_error:
+                                        print(f"⚠️  WARNING: TLDR generation failed for {paper_id}: {tldr_error}")
+                                    
+                                    paper = {
+                                        "paperId": paper_id,
+                                        "title": paper_data.get("title", "No title"),
+                                        "abstract": abstract_text,
+                                        "tldr": tldr_text,
+                                        "url": f"https://www.biorxiv.org/content/{doi}v{paper_data.get('version', '1')}",
+                                        "authors": authors,
+                                        "year": paper_data.get("date", "N/A")[:4],
+                                        "citationCount": 0,
+                                        "venue": None,  # bioRxiv papers don't have journal info
+                                        "source": "bioRxiv"
+                                    }
+                                    range_papers.append(paper)
                             
-                            # Check if any query term matches
-                            matches = False
-                            for term in query_terms.split(","):
-                                term_clean = term.strip().lower()
-                                if term_clean and (term_clean in title or term_clean in abstract):
-                                    matches = True
-                                    break
-                            
-                            if matches:
-                                local_matches += 1
-                                
-                                # Extract author names
-                                authors = []
-                                if paper_data.get("authors"):
-                                    author_str = paper_data.get("authors", "")
-                                    author_names = author_str.split(";")
-                                    authors = [{"name": name.strip()} for name in author_names if name.strip()]
-                                
-                                # Create paper ID from DOI
-                                doi = paper_data.get("doi", "")
-                                paper_id = f"biorxiv_{doi.replace('/', '_')}"
-                                
-                                # Generate TLDR from abstract
-                                abstract_text = paper_data.get("abstract", "No abstract available")
-                                tldr_text = generate_tldr(abstract_text) if abstract_text != "No abstract available" else None
-                                
-                                paper = {
-                                    "paperId": paper_id,
-                                    "title": paper_data.get("title", "No title"),
-                                    "abstract": abstract_text,
-                                    "tldr": tldr_text,
-                                    "url": f"https://www.biorxiv.org/content/{doi}v{paper_data.get('version', '1')}",
-                                    "authors": authors,
-                                    "year": paper_data.get("date", "N/A")[:4],
-                                    "citationCount": 0,
-                                    "venue": None,  # bioRxiv papers don't have journal info
-                                    "source": "bioRxiv"
-                                }
-                                range_papers.append(paper)
+                            except Exception as paper_error:
+                                print(f"❌ ERROR: Failed to process paper from {start_date}: {paper_error}")
+                                continue
                         
                         # Update counter and report progress every 5 matches
                         async with match_counter["lock"]:
@@ -226,9 +241,16 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
                                 print(f"🔍 Progress: {new_count} matching papers found so far...")
                         
                 except asyncio.TimeoutError:
-                    print(f"Timeout fetching {start_date} to {end_date}")
+                    print(f"⏱️  TIMEOUT: bioRxiv request timed out for {start_date}")
+                    print(f"   URL: {url}")
+                except aiohttp.ClientError as client_error:
+                    print(f"❌ CLIENT ERROR: Network issue fetching {start_date}: {client_error}")
+                    print(f"   URL: {url}")
                 except Exception as e:
-                    print(f"Error fetching {start_date} to {end_date}: {e}")
+                    print(f"❌ UNEXPECTED ERROR fetching {start_date}: {type(e).__name__}: {e}")
+                    print(f"   URL: {url}")
+                    import traceback
+                    print(f"   Traceback: {traceback.format_exc()[:200]}")
             
             return range_papers
         
@@ -240,11 +262,19 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
         
         # Combine results from all date ranges
         all_papers = []
-        for result in results:
+        error_count = 0
+        for i, result in enumerate(results):
             if isinstance(result, list):
                 all_papers.extend(result)
+            elif isinstance(result, Exception):
+                error_count += 1
+                print(f"❌ ERROR in task {i}: {type(result).__name__}: {result}")
             else:
-                print(f"Error in parallel fetch: {result}")
+                error_count += 1
+                print(f"❌ UNKNOWN ERROR in task {i}: {result}")
+        
+        if error_count > 0:
+            print(f"⚠️  Total errors encountered: {error_count} out of {len(date_ranges)} date ranges")
         
         # Remove duplicates (by paperId) and limit to max_results
         seen_ids = set()
@@ -256,13 +286,16 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
                 if len(unique_papers) >= max_results:
                     break
         
-        print(f"Found {len(unique_papers)} matching bioRxiv papers (from {len(all_papers)} total)")
+        print(f"✅ Found {len(unique_papers)} matching bioRxiv papers (from {len(all_papers)} total)")
         return unique_papers
     
     except Exception as e:
-        print(f"bioRxiv API error: {e}")
+        print(f"❌ CRITICAL ERROR in fetch_biorxiv_papers: {type(e).__name__}: {e}")
         import traceback
+        print("=" * 60)
+        print("FULL TRACEBACK:")
         traceback.print_exc()
+        print("=" * 60)
         return []
 
 @app.get("/", response_class=HTMLResponse)
@@ -545,8 +578,15 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 else:
                     print(f"🔄 Background: No new papers found in extended search")
                     
+            except asyncio.CancelledError:
+                print(f"⚠️  Background fetch was cancelled")
             except Exception as e:
-                print(f"❌ Background fetch error: {e}")
+                print(f"❌ BACKGROUND FETCH ERROR: {type(e).__name__}: {e}")
+                import traceback
+                print("=" * 60)
+                print("BACKGROUND TASK TRACEBACK:")
+                traceback.print_exc()
+                print("=" * 60)
         
         # Schedule background task without waiting for it
         asyncio.create_task(background_fetch())
