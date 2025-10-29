@@ -206,6 +206,29 @@
                 document.querySelectorAll('.paper-card').forEach(card => {
                     observer.observe(card);
                 });
+
+                // Auto-hide/show header on scroll
+                let lastScrollTop = 0;
+                let scrollTimeout;
+                const header = document.querySelector('.header');
+                
+                window.addEventListener('scroll', function() {
+                    clearTimeout(scrollTimeout);
+                    
+                    scrollTimeout = setTimeout(function() {
+                        let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        
+                        if (scrollTop > lastScrollTop && scrollTop > 100) {
+                            // Scrolling down & past 100px
+                            header.classList.add('header-hidden');
+                        } else {
+                            // Scrolling up
+                            header.classList.remove('header-hidden');
+                        }
+                        
+                        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+                    }, 50); // Debounce for smoother performance
+                }, false);
             });
 
             async function logCardVisible(cardNumber, paperId) {

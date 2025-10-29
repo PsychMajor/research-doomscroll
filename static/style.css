@@ -27,6 +27,11 @@ body {
     border-bottom: 1px solid #38444d;
     padding: 20px;
     z-index: 100;
+    transition: transform 0.3s ease-in-out;
+}
+
+.header-hidden {
+    transform: translateY(-100%);
 }
 
 .header-top {
