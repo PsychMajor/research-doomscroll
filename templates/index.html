@@ -178,9 +178,9 @@
                             const cardNumber = card.dataset.cardNumber;
                             const paperId = card.dataset.paperId;
                             
-                            // Only log once per card
-                            if (!loggedCards.has(cardNumber)) {
-                                loggedCards.add(cardNumber);
+                            // Use paper ID as unique identifier to avoid conflicts with restarted numbering
+                            if (!loggedCards.has(paperId)) {
+                                loggedCards.add(paperId);
                                 logCardVisible(cardNumber, paperId);
                             }
                         }
