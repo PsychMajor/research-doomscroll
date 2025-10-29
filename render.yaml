@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: research-doomscroll
+    env: python
+    buildCommand: pip install -r requirements.txt && python -c "import nltk; nltk.download('punkt_tab'); nltk.download('punkt')"
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
