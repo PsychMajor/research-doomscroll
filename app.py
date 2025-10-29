@@ -771,9 +771,9 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     print(f"   📚 Semantic Scholar: {len(semantic_papers_cache)} papers")
                     print(f"   🧬 bioRxiv: {len(biorxiv_papers_cache)} papers")
                     
-                    # Check if we need deep search
-                    if len(cacheable_papers) < 40:
-                        print(f"🔍 Cache has only {len(cacheable_papers)} papers (<40), triggering DEEP SEARCH...")
+                    # Check if we need deep search - specifically for bioRxiv cache
+                    if len(biorxiv_papers_cache) < 40:
+                        print(f"🔍 bioRxiv cache has only {len(biorxiv_papers_cache)} papers (<40), triggering DEEP SEARCH...")
                         
                         # Get the next date range for deep search
                         from datetime import datetime, timedelta
@@ -839,9 +839,9 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     # Still check if we need deep search based on current cache
                     cache_key = f"{topics}_{authors}_{use_recommendations}"
                     if cache_key in PAPER_CACHE:
-                        current_cache_size = len(PAPER_CACHE[cache_key].get("mixed", []))
-                        if current_cache_size < 40:
-                            print(f"🔍 Cache has only {current_cache_size} papers (<40), triggering DEEP SEARCH...")
+                        current_biorxiv_cache_size = len(PAPER_CACHE[cache_key].get("biorxiv", []))
+                        if current_biorxiv_cache_size < 40:
+                            print(f"🔍 bioRxiv cache has only {current_biorxiv_cache_size} papers (<40), triggering DEEP SEARCH...")
                             
                             # Get the next date range for deep search
                             from datetime import datetime, timedelta
@@ -986,9 +986,9 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         print(f"📦 Cache key: '{cache_key}'")
         print(f"📦 Total cache entries: {len(PAPER_CACHE)}")
         
-        # Check if we need deep search for subsequent searches
-        if len(cached_papers) < 40 and topics:
-            print(f"🔍 Cache has only {len(cached_papers)} papers (<40), triggering DEEP SEARCH for subsequent searches...")
+        # Check if we need deep search for subsequent searches - specifically for bioRxiv cache
+        if len(biorxiv_papers) < 40 and topics:
+            print(f"🔍 bioRxiv cache has only {len(biorxiv_papers)} papers (<40), triggering DEEP SEARCH for subsequent searches...")
             
             # Run deep search in background
             async def run_deep_search():
@@ -1060,9 +1060,10 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             asyncio.create_task(run_deep_search())
             print(f"🔍 Deep search scheduled (will run in background)")
     else:
-        # If we have fewer than 20 papers total, also check if we need deep search
-        if len(papers) < 40 and topics:
-            print(f"🔍 Total papers ({len(papers)}) < 40, triggering DEEP SEARCH for subsequent searches...")
+        # If we have fewer than 20 papers total, also check if we need deep search for bioRxiv
+        biorxiv_count = sum(1 for p in papers if p.get('source') == 'bioRxiv')
+        if biorxiv_count < 40 and topics:
+            print(f"🔍 bioRxiv papers ({biorxiv_count}) < 40, triggering DEEP SEARCH for subsequent searches...")
             
             # Run deep search in background
             async def run_deep_search():
@@ -1215,9 +1216,9 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
         print(f"   📚 Semantic Scholar remaining: {len(semantic_remaining)}")
         print(f"   🧬 bioRxiv remaining: {len(biorxiv_remaining)}")
         
-        # Check if cache is running low and trigger deep search
-        if len(remaining_mixed) < 40 and topics:
-            print(f"🔍 LOAD MORE: Cache dropped below 40 ({len(remaining_mixed)} remaining), triggering DEEP SEARCH...")
+        # Check if bioRxiv cache is running low and trigger deep search
+        if len(biorxiv_remaining) < 40 and topics:
+            print(f"🔍 LOAD MORE: bioRxiv cache dropped below 40 ({len(biorxiv_remaining)} remaining), triggering DEEP SEARCH...")
             
             # Run deep search in background
             async def run_deep_search():
