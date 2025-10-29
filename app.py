@@ -932,6 +932,114 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         print(f"   🧬 bioRxiv: {len(biorxiv_papers)} papers")
         print(f"📦 Cache key: '{cache_key}'")
         print(f"📦 Total cache entries: {len(PAPER_CACHE)}")
+        
+        # Check if we need deep search for subsequent searches
+        if len(cached_papers) < 40 and topics:
+            print(f"🔍 Cache has only {len(cached_papers)} papers (<40), triggering DEEP SEARCH for subsequent searches...")
+            
+            # Run deep search in background
+            async def run_deep_search():
+                try:
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    
+                    # Filter out already rated papers
+                    filtered_deep = []
+                    for paper in deep_papers:
+                        if paper["paperId"] not in rated_paper_ids:
+                            filtered_deep.append(paper)
+                    
+                    print(f"🔍 DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
+                    
+                    # Combine with existing cache and remove duplicates
+                    existing_cache = PAPER_CACHE.get(cache_key, {}).get("mixed", [])
+                    existing_ids = set(p["paperId"] for p in existing_cache) | set(p["paperId"] for p in displayed_papers)
+                    new_deep_papers = []
+                    for paper in filtered_deep:
+                        if paper["paperId"] not in existing_ids:
+                            new_deep_papers.append(paper)
+                            existing_ids.add(paper["paperId"])
+                    
+                    if new_deep_papers:
+                        print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
+                        
+                        # Update cache with deep search results
+                        final_cache = existing_cache + new_deep_papers
+                        random.shuffle(final_cache)
+                        
+                        semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
+                        biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
+                        
+                        PAPER_CACHE[cache_key] = {
+                            "semantic_scholar": semantic_final,
+                            "biorxiv": biorxiv_final,
+                            "mixed": final_cache
+                        }
+                        print(f"📦 DEEP SEARCH: Final cache size: {len(final_cache)} papers")
+                        print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                        print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                    else:
+                        print(f"🔍 DEEP SEARCH: No additional papers found")
+                
+                except Exception as e:
+                    print(f"❌ DEEP SEARCH ERROR: {type(e).__name__}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            asyncio.create_task(run_deep_search())
+            print(f"🔍 Deep search scheduled (will run in background)")
+    else:
+        # If we have fewer than 20 papers total, also check if we need deep search
+        if len(papers) < 40 and topics:
+            print(f"🔍 Total papers ({len(papers)}) < 40, triggering DEEP SEARCH for subsequent searches...")
+            
+            # Run deep search in background
+            async def run_deep_search():
+                try:
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    
+                    # Filter out already rated papers
+                    filtered_deep = []
+                    for paper in deep_papers:
+                        if paper["paperId"] not in rated_paper_ids:
+                            filtered_deep.append(paper)
+                    
+                    print(f"🔍 DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
+                    
+                    # Remove duplicates with displayed papers
+                    displayed_ids = set(p["paperId"] for p in displayed_papers)
+                    new_deep_papers = []
+                    for paper in filtered_deep:
+                        if paper["paperId"] not in displayed_ids:
+                            new_deep_papers.append(paper)
+                    
+                    if new_deep_papers:
+                        print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
+                        
+                        # Create cache with deep search results
+                        random.shuffle(new_deep_papers)
+                        
+                        semantic_final = [p for p in new_deep_papers if p['source'] == 'Semantic Scholar']
+                        biorxiv_final = [p for p in new_deep_papers if p['source'] == 'bioRxiv']
+                        
+                        cache_key = f"{topics}_{authors}_{use_recommendations}"
+                        PAPER_CACHE[cache_key] = {
+                            "semantic_scholar": semantic_final,
+                            "biorxiv": biorxiv_final,
+                            "mixed": new_deep_papers
+                        }
+                        print(f"📦 DEEP SEARCH: Created cache with {len(new_deep_papers)} papers")
+                        print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                        print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                    else:
+                        print(f"🔍 DEEP SEARCH: No additional papers found")
+                
+                except Exception as e:
+                    print(f"❌ DEEP SEARCH ERROR: {type(e).__name__}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            asyncio.create_task(run_deep_search())
+            print(f"🔍 Deep search scheduled (will run in background)")
     
     print(f"Displaying first {len(displayed_papers)} papers")
     
