@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 import requests
 import os
 import json
+import asyncio
 from pathlib import Path
 
 app = FastAPI()
@@ -1122,6 +1123,62 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
         print(f"📦 CACHE STATUS: {len(remaining_mixed)} papers remaining")
         print(f"   📚 Semantic Scholar remaining: {len(semantic_remaining)}")
         print(f"   🧬 bioRxiv remaining: {len(biorxiv_remaining)}")
+        
+        # Check if cache is running low and trigger deep search
+        if len(remaining_mixed) < 40 and topics:
+            print(f"🔍 LOAD MORE: Cache dropped below 40 ({len(remaining_mixed)} remaining), triggering DEEP SEARCH...")
+            
+            # Run deep search in background
+            async def run_deep_search():
+                try:
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    
+                    # Filter out already rated papers
+                    filtered_deep = []
+                    for paper in deep_papers:
+                        if paper["paperId"] not in rated_paper_ids:
+                            filtered_deep.append(paper)
+                    
+                    print(f"🔍 DEEP SEARCH (LOAD MORE): Got {len(filtered_deep)} papers from additional pages")
+                    
+                    # Combine with existing cache and remove duplicates
+                    current_cache = PAPER_CACHE.get(cache_key, {}).get("mixed", [])
+                    existing_ids = set(p["paperId"] for p in current_cache)
+                    new_deep_papers = []
+                    for paper in filtered_deep:
+                        if paper["paperId"] not in existing_ids:
+                            new_deep_papers.append(paper)
+                            existing_ids.add(paper["paperId"])
+                    
+                    if new_deep_papers:
+                        print(f"🔍 DEEP SEARCH (LOAD MORE): Found {len(new_deep_papers)} NEW papers from deep search")
+                        
+                        # Update cache with deep search results
+                        final_cache = current_cache + new_deep_papers
+                        import random
+                        random.shuffle(final_cache)
+                        
+                        semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
+                        biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
+                        
+                        PAPER_CACHE[cache_key] = {
+                            "semantic_scholar": semantic_final,
+                            "biorxiv": biorxiv_final,
+                            "mixed": final_cache
+                        }
+                        print(f"📦 DEEP SEARCH (LOAD MORE): Final cache size: {len(final_cache)} papers")
+                        print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                        print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                    else:
+                        print(f"🔍 DEEP SEARCH (LOAD MORE): No additional papers found")
+                
+                except Exception as e:
+                    print(f"❌ DEEP SEARCH (LOAD MORE) ERROR: {type(e).__name__}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            asyncio.create_task(run_deep_search())
+            print(f"🔍 Deep search scheduled (will run in background)")
         
         # If we have enough cached papers, return them
         if len(fresh_papers) >= 10:  # Minimum threshold
