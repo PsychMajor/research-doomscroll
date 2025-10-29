@@ -28,9 +28,20 @@ BIORXIV_URL = "https://api.biorxiv.org/details/biorxiv"
 # Optional API key from environment variable
 API_KEY = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 
-# Profile storage
-PROFILE_FILE = Path("profile.json")
-FEEDBACK_FILE = Path("feedback.json")
+# Profile storage - use /tmp for cloud deployments with ephemeral filesystems
+# Try to write to current directory first, fall back to /tmp if needed
+try:
+    test_file = Path("._write_test")
+    test_file.write_text("test")
+    test_file.unlink()
+    DATA_DIR = Path(".")
+except:
+    # Filesystem is read-only, use /tmp instead
+    DATA_DIR = Path("/tmp")
+    print(f"⚠️  Current directory is read-only, using {DATA_DIR} for data storage")
+
+PROFILE_FILE = DATA_DIR / "profile.json"
+FEEDBACK_FILE = DATA_DIR / "feedback.json"
 
 # Paper cache for load-more functionality
 # Structure: {cache_key: {"semantic_scholar": [...], "biorxiv": [...], "mixed": [...]}}
@@ -79,9 +90,12 @@ def generate_tldr(abstract):
 
 def load_profile():
     """Load user profile from file"""
-    if PROFILE_FILE.exists():
-        with open(PROFILE_FILE, 'r') as f:
-            return json.load(f)
+    try:
+        if PROFILE_FILE.exists():
+            with open(PROFILE_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"⚠️  Could not load profile: {e}")
     return {"topics": [], "authors": []}
 
 def save_profile(topics_list, authors_list):
@@ -90,21 +104,30 @@ def save_profile(topics_list, authors_list):
         "topics": topics_list,
         "authors": authors_list
     }
-    with open(PROFILE_FILE, 'w') as f:
-        json.dump(profile, f, indent=2)
+    try:
+        with open(PROFILE_FILE, 'w') as f:
+            json.dump(profile, f, indent=2)
+    except Exception as e:
+        print(f"⚠️  Could not save profile: {e}")
     return profile
 
 def load_feedback():
     """Load user feedback (likes/dislikes) from file"""
-    if FEEDBACK_FILE.exists():
-        with open(FEEDBACK_FILE, 'r') as f:
-            return json.load(f)
+    try:
+        if FEEDBACK_FILE.exists():
+            with open(FEEDBACK_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"⚠️  Could not load feedback: {e}")
     return {"liked": [], "disliked": []}
 
 def save_feedback(feedback_data):
     """Save user feedback to file"""
-    with open(FEEDBACK_FILE, 'w') as f:
-        json.dump(feedback_data, f, indent=2)
+    try:
+        with open(FEEDBACK_FILE, 'w') as f:
+            json.dump(feedback_data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️  Could not save feedback: {e}")
     return feedback_data
 
 def get_paper_id_from_url(url):
