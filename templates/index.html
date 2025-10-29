@@ -7,6 +7,22 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- Initial Page Loading Spinner -->
+    <div id="pageLoader" class="page-loader">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p class="loader-text">Loading Research Doomscroll...</p>
+        </div>
+    </div>
+
+    <!-- Feed Generation Loading Overlay -->
+    <div id="feedLoader" class="feed-loader hidden">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p class="loader-text">Generating your feed...</p>
+        </div>
+    </div>
+
     <div class="container">
         <header class="header">
             <div class="header-top">
@@ -23,7 +39,7 @@
             
             {% if show_form %}
             <div class="search-form-wrapper" id="searchFormWrapper">
-                <form class="search-form" method="POST" action="/profile/save">
+                <form class="search-form" method="POST" action="/profile/save" onsubmit="showFeedLoader()">
                 <div class="profile-header">
                     <div class="profile-info">
                         <div>
@@ -135,6 +151,17 @@
 
             // Auto-collapse the form on page load if we have results
             window.addEventListener('DOMContentLoaded', function() {
+                // Hide initial page loader
+                const pageLoader = document.getElementById('pageLoader');
+                if (pageLoader) {
+                    setTimeout(() => {
+                        pageLoader.classList.add('hidden');
+                        setTimeout(() => {
+                            pageLoader.style.display = 'none';
+                        }, 300);
+                    }, 500); // Show for at least 500ms
+                }
+
                 const hasPapers = {{ 'true' if papers else 'false' }};
                 const hasTopicsOrAuthors = {{ 'true' if topics or authors else 'false' }};
                 
@@ -274,6 +301,13 @@
                 
                 if (likedCountEl) likedCountEl.textContent = likedPapers.size;
                 if (dislikedCountEl) dislikedCountEl.textContent = dislikedPapers.size;
+            }
+
+            function showFeedLoader() {
+                const feedLoader = document.getElementById('feedLoader');
+                if (feedLoader) {
+                    feedLoader.classList.remove('hidden');
+                }
             }
 
             function toggleSearchForm() {

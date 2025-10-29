@@ -680,7 +680,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
 
         # Check for API errors
         if response.status_code == 429:
-            semantic_error = "⏰ Semantic Scholar rate limit reached, showing bioRxiv papers only."
+            semantic_error = "Semantic Scholar rate limit reached, showing bioRxiv papers only."
         elif response.status_code != 200:
             semantic_error = f"Semantic Scholar API Error: {data.get('message', 'Unknown error')}"
         else:
