@@ -1123,21 +1123,75 @@ body {
     }
 
     .paper-card {
-        padding: 12px 16px;
+        padding: 16px;
+    }
+
+    .card-header {
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .paper-icon {
+        font-size: 22px;
+        width: 44px;
+        height: 44px;
     }
 
     .paper-title {
-        font-size: 16px;
+        font-size: 18px;
+        line-height: 1.4;
+        margin-bottom: 10px;
     }
 
-    .paper-abstract {
+    .paper-info {
         font-size: 14px;
+        line-height: 1.5;
+        gap: 8px;
+    }
+
+    .authors {
+        font-size: 14px;
+    }
+
+    .year, .citations {
+        font-size: 14px;
+    }
+
+    .source-badge {
+        font-size: 12px;
+        padding: 3px 10px;
+    }
+
+    .paper-tldr {
+        margin-left: 0;
+        margin-top: 12px;
+        margin-bottom: 16px;
+        font-size: 15px;
+        line-height: 1.6;
+        padding: 14px 16px;
+    }
+
+    .paper-abstract-container {
         margin-left: 0;
         margin-top: 12px;
     }
 
+    .abstract-toggle {
+        font-size: 15px;
+        padding: 10px 0;
+    }
+
+    .paper-abstract {
+        font-size: 15px;
+        line-height: 1.6;
+        margin-left: 0;
+        margin-top: 12px;
+        padding: 12px 0;
+    }
+
     .card-footer {
         margin-left: 0;
+        margin-top: 16px;
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
@@ -1146,6 +1200,50 @@ body {
     .card-actions {
         width: 100%;
         justify-content: flex-end;
+    }
+}
+
+/* Tablet and larger phones */
+@media (min-width: 601px) and (max-width: 768px) {
+    .paper-card {
+        padding: 18px;
+    }
+
+    .paper-title {
+        font-size: 19px;
+        line-height: 1.4;
+    }
+
+    .paper-info {
+        font-size: 14px;
+    }
+
+    .paper-tldr {
+        font-size: 16px;
+        line-height: 1.7;
+        margin-left: 0;
+        margin-top: 14px;
+        padding: 16px 18px;
+    }
+
+    .paper-abstract-container {
+        margin-left: 0;
+        margin-top: 14px;
+    }
+
+    .paper-abstract {
+        font-size: 16px;
+        line-height: 1.7;
+        margin-left: 0;
+    }
+
+    .source-badge {
+        font-size: 12px;
+    }
+
+    .card-footer {
+        margin-left: 0;
+        margin-top: 16px;
     }
 }
 
