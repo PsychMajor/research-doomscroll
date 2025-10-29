@@ -211,24 +211,30 @@
                 let lastScrollTop = 0;
                 let scrollTimeout;
                 const header = document.querySelector('.header');
+                const scrollThreshold = 150; // Minimum scroll distance to trigger hide
+                const showThreshold = 80; // Minimum scroll-up distance to show header
                 
                 window.addEventListener('scroll', function() {
                     clearTimeout(scrollTimeout);
                     
                     scrollTimeout = setTimeout(function() {
                         let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        let scrollDelta = scrollTop - lastScrollTop;
                         
-                        if (scrollTop > lastScrollTop && scrollTop > 100) {
-                            // Scrolling down & past 100px
+                        if (scrollDelta > 5 && scrollTop > scrollThreshold) {
+                            // Scrolling down & past threshold
                             header.classList.add('header-hidden');
-                        } else {
-                            // Scrolling up
+                        } else if (scrollDelta < -showThreshold) {
+                            // Scrolling up at least 80px
+                            header.classList.remove('header-hidden');
+                        } else if (scrollTop <= 0) {
+                            // At top of page
                             header.classList.remove('header-hidden');
                         }
                         
                         lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
-                    }, 50); // Debounce for smoother performance
-                }, false);
+                    }, 20); // Reduced debounce for more responsive feel
+                }, { passive: true });
             });
 
             async function logCardVisible(cardNumber, paperId) {
