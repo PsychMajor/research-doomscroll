@@ -476,12 +476,10 @@
                         
                         console.log('Feed element found:', !!feed);
                         
-                        // Get current card count for numbering
-                        const currentCardCount = document.querySelectorAll('.paper-card').length;
-                        
+                        // Restart numbering from 1 for each load more batch
                         // Append each new paper
                         data.papers.forEach((paper, index) => {
-                            const cardNumber = currentCardCount + index + 1;
+                            const cardNumber = index + 1;  // Restart from 1 each time
                             const cardHtml = createPaperCard(paper, cardNumber);
                             feed.insertAdjacentHTML('beforeend', cardHtml);
                         });
