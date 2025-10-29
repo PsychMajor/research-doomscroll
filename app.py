@@ -110,6 +110,189 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
+async def fetch_biorxiv_all_pages(query_terms, max_results=200):
+    """Fetch ALL pages (cursors > 100) from bioRxiv for the first 30 days
+    
+    This is called when cache is low (<40 papers) to ensure comprehensive coverage.
+    """
+    import asyncio
+    import aiohttp
+    from datetime import datetime, timedelta
+    
+    try:
+        print(f"🔍 DEEP SEARCH: Fetching ALL pages from first 30 days for: {query_terms}")
+        
+        # Shared counter
+        match_counter = {"count": 0, "lock": asyncio.Lock()}
+        
+        now = datetime.now()
+        date_list = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
+        
+        async def get_total_papers_for_date(session, date_str):
+            """Get total count to determine pages needed"""
+            url = f"{BIORXIV_URL}/{date_str}/{date_str}/0"
+            try:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status != 200:
+                        return 0
+                    data = await response.json()
+                    messages = data.get("messages", [])
+                    for msg in messages:
+                        if "total" in msg:
+                            return int(msg["total"])
+                    return 0
+            except Exception as e:
+                print(f"⚠️  WARNING: Could not get total for {date_str}: {e}")
+                return 0
+        
+        async def fetch_single_page(session, date_str, cursor, semaphore):
+            """Fetch a single page for a specific date and cursor"""
+            page_papers = []
+            
+            async with semaphore:
+                url = f"{BIORXIV_URL}/{date_str}/{date_str}/{cursor}"
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                        if response.status != 200:
+                            return page_papers
+                        
+                        data = await response.json()
+                        if "collection" not in data or not data["collection"]:
+                            return page_papers
+                        
+                        batch = data["collection"]
+                        
+                        # Filter papers by query terms
+                        local_matches = 0
+                        for paper_data in batch:
+                            try:
+                                title = paper_data.get("title", "").lower()
+                                abstract = paper_data.get("abstract", "").lower()
+                                
+                                matches = False
+                                for term in query_terms.split(","):
+                                    term_clean = term.strip().lower()
+                                    if term_clean and (term_clean in title or term_clean in abstract):
+                                        matches = True
+                                        break
+                                
+                                if matches:
+                                    local_matches += 1
+                                    
+                                    authors = []
+                                    if paper_data.get("authors"):
+                                        author_str = paper_data.get("authors", "")
+                                        author_names = author_str.split(";")
+                                        authors = [{"name": name.strip()} for name in author_names if name.strip()]
+                                    
+                                    doi = paper_data.get("doi", "")
+                                    if not doi:
+                                        continue
+                                    
+                                    paper_id = f"biorxiv_{doi.replace('/', '_')}"
+                                    
+                                    abstract_text = paper_data.get("abstract", "No abstract available")
+                                    tldr_text = None
+                                    try:
+                                        tldr_text = generate_tldr(abstract_text) if abstract_text != "No abstract available" else None
+                                    except Exception:
+                                        pass
+                                    
+                                    paper = {
+                                        "paperId": paper_id,
+                                        "title": paper_data.get("title", "No title"),
+                                        "abstract": abstract_text,
+                                        "tldr": tldr_text,
+                                        "url": f"https://www.biorxiv.org/content/{doi}v{paper_data.get('version', '1')}",
+                                        "authors": authors,
+                                        "year": paper_data.get("date", "N/A")[:4],
+                                        "citationCount": 0,
+                                        "venue": None,
+                                        "source": "bioRxiv"
+                                    }
+                                    page_papers.append(paper)
+                            
+                            except Exception as paper_error:
+                                continue
+                        
+                        # Update counter every 10 matches
+                        if local_matches > 0:
+                            async with match_counter["lock"]:
+                                old_count = match_counter["count"]
+                                match_counter["count"] += local_matches
+                                new_count = match_counter["count"]
+                                
+                                if new_count // 10 > old_count // 10:
+                                    print(f"🔍 DEEP SEARCH Progress: {new_count} matching papers found...")
+                        
+                except asyncio.TimeoutError:
+                    print(f"⏱️  TIMEOUT: Deep search timeout for {date_str} cursor {cursor}")
+                except Exception as e:
+                    print(f"❌ ERROR: Deep search failed for {date_str} cursor {cursor}: {e}")
+            
+            return page_papers
+        
+        print(f"🔍 Step 1: Getting paper counts for 30 days...")
+        semaphore = asyncio.Semaphore(15)  # Higher concurrency for deep search
+        
+        async with aiohttp.ClientSession() as session:
+            # Get total papers for each date
+            total_tasks = [get_total_papers_for_date(session, date_str) for date_str in date_list]
+            total_counts = await asyncio.gather(*total_tasks)
+            
+            # Calculate all page fetches needed
+            all_page_tasks = []
+            total_pages = 0
+            
+            for date_str, total_papers in zip(date_list, total_counts):
+                if total_papers > 100:  # Only fetch additional pages if there are more than 100 papers
+                    num_pages = (total_papers + 99) // 100  # Total pages
+                    # Fetch pages starting from cursor 100 (skip cursor 0 as it's already fetched)
+                    for page_num in range(1, num_pages):
+                        cursor = page_num * 100
+                        all_page_tasks.append(fetch_single_page(session, date_str, cursor, semaphore))
+                        total_pages += 1
+            
+            print(f"🔍 Step 2: Fetching {total_pages} additional pages (cursors > 100) across 30 days...")
+            
+            if total_pages == 0:
+                print(f"✅ DEEP SEARCH: No additional pages needed (all dates have ≤100 papers)")
+                return []
+            
+            # Fetch all pages in parallel
+            results = await asyncio.gather(*all_page_tasks, return_exceptions=True)
+        
+        # Combine results
+        all_papers = []
+        error_count = 0
+        for result in results:
+            if isinstance(result, list):
+                all_papers.extend(result)
+            elif isinstance(result, Exception):
+                error_count += 1
+        
+        if error_count > 0:
+            print(f"⚠️  DEEP SEARCH: {error_count} errors encountered")
+        
+        # Remove duplicates
+        seen_ids = set()
+        unique_papers = []
+        for paper in all_papers:
+            if paper["paperId"] not in seen_ids:
+                seen_ids.add(paper["paperId"])
+                unique_papers.append(paper)
+                if len(unique_papers) >= max_results:
+                    break
+        
+        print(f"✅ DEEP SEARCH Complete: Found {len(unique_papers)} papers from additional pages")
+        return unique_papers
+    
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR in deep search: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
     """Fetch papers from bioRxiv API - only fetches cursor=0 (first 100 papers) from each day
     
@@ -575,8 +758,96 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     print(f"📦 Background: Updated cache with {len(cacheable_papers)} total papers")
                     print(f"   📚 Semantic Scholar: {len(semantic_papers_cache)} papers")
                     print(f"   🧬 bioRxiv: {len(biorxiv_papers_cache)} papers")
+                    
+                    # Check if we need deep search
+                    if len(cacheable_papers) < 40:
+                        print(f"🔍 Cache has only {len(cacheable_papers)} papers (<40), triggering DEEP SEARCH...")
+                        deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                        
+                        # Filter out already rated papers
+                        filtered_deep = []
+                        for paper in deep_papers:
+                            if paper["paperId"] not in rated_paper_ids:
+                                filtered_deep.append(paper)
+                        
+                        print(f"� DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
+                        
+                        # Combine with existing cache and remove duplicates
+                        existing_ids = set(p["paperId"] for p in cacheable_papers)
+                        new_deep_papers = []
+                        for paper in filtered_deep:
+                            if paper["paperId"] not in existing_ids:
+                                new_deep_papers.append(paper)
+                                existing_ids.add(paper["paperId"])
+                        
+                        if new_deep_papers:
+                            print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
+                            
+                            # Update cache with deep search results
+                            final_cache = cacheable_papers + new_deep_papers
+                            random.shuffle(final_cache)
+                            
+                            semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
+                            biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
+                            
+                            PAPER_CACHE[cache_key] = {
+                                "semantic_scholar": semantic_final,
+                                "biorxiv": biorxiv_final,
+                                "mixed": final_cache
+                            }
+                            print(f"📦 DEEP SEARCH: Final cache size: {len(final_cache)} papers")
+                            print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                            print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                        else:
+                            print(f"🔍 DEEP SEARCH: No additional papers found")
                 else:
-                    print(f"🔄 Background: No new papers found in extended search")
+                    print(f"�🔄 Background: No new papers found in extended search")
+                    
+                    # Still check if we need deep search based on current cache
+                    cache_key = f"{topics}_{authors}_{use_recommendations}"
+                    if cache_key in PAPER_CACHE:
+                        current_cache_size = len(PAPER_CACHE[cache_key].get("mixed", []))
+                        if current_cache_size < 40:
+                            print(f"🔍 Cache has only {current_cache_size} papers (<40), triggering DEEP SEARCH...")
+                            deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                            
+                            # Filter out already rated papers
+                            filtered_deep = []
+                            for paper in deep_papers:
+                                if paper["paperId"] not in rated_paper_ids:
+                                    filtered_deep.append(paper)
+                            
+                            print(f"🔍 DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
+                            
+                            # Combine with existing cache and remove duplicates
+                            existing_cache = PAPER_CACHE[cache_key].get("mixed", [])
+                            existing_ids = set(p["paperId"] for p in existing_cache)
+                            new_deep_papers = []
+                            for paper in filtered_deep:
+                                if paper["paperId"] not in existing_ids:
+                                    new_deep_papers.append(paper)
+                                    existing_ids.add(paper["paperId"])
+                            
+                            if new_deep_papers:
+                                print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
+                                
+                                # Update cache with deep search results
+                                final_cache = existing_cache + new_deep_papers
+                                random.shuffle(final_cache)
+                                
+                                semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
+                                biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
+                                
+                                PAPER_CACHE[cache_key] = {
+                                    "semantic_scholar": semantic_final,
+                                    "biorxiv": biorxiv_final,
+                                    "mixed": final_cache
+                                }
+                                print(f"📦 DEEP SEARCH: Final cache size: {len(final_cache)} papers")
+                                print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                                print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                            else:
+                                print(f"🔍 DEEP SEARCH: No additional papers found")
                     
             except asyncio.CancelledError:
                 print(f"⚠️  Background fetch was cancelled")
