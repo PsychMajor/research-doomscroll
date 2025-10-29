@@ -36,6 +36,10 @@ FEEDBACK_FILE = Path("feedback.json")
 # Structure: {cache_key: {"semantic_scholar": [...], "biorxiv": [...], "mixed": [...]}}
 PAPER_CACHE = {}
 
+# Deep search date tracking
+# Structure: {cache_key: last_end_date (datetime object)}
+DEEP_SEARCH_DATES = {}
+
 # Download NLTK data on startup
 try:
     import nltk
@@ -111,23 +115,30 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
-async def fetch_biorxiv_all_pages(query_terms, max_results=200):
-    """Fetch ALL pages (cursors > 100) from bioRxiv for the first 30 days
+async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None):
+    """Fetch ALL pages (cursors > 100) from bioRxiv for 30 days starting from start_date
     
     This is called when cache is low (<40 papers) to ensure comprehensive coverage.
+    If start_date is None, uses current date (most recent papers).
+    If start_date is provided, fetches 30 days starting from that date going backwards.
     """
     import asyncio
     import aiohttp
     from datetime import datetime, timedelta
     
     try:
-        print(f"🔍 DEEP SEARCH: Fetching ALL pages from first 30 days for: {query_terms}")
+        if start_date is None:
+            start_date = datetime.now()
+        elif isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+        
+        # Calculate date range: 30 days ending at start_date
+        date_list = [(start_date - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
+        
+        print(f"🔍 DEEP SEARCH: Fetching ALL pages from {date_list[-1]} to {date_list[0]} for: {query_terms}")
         
         # Shared counter
         match_counter = {"count": 0, "lock": asyncio.Lock()}
-        
-        now = datetime.now()
-        date_list = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
         
         async def get_total_papers_for_date(session, date_str):
             """Get total count to determine pages needed"""
@@ -763,7 +774,28 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     # Check if we need deep search
                     if len(cacheable_papers) < 40:
                         print(f"🔍 Cache has only {len(cacheable_papers)} papers (<40), triggering DEEP SEARCH...")
-                        deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                        
+                        # Get the next date range for deep search
+                        from datetime import datetime, timedelta
+                        cache_key = f"{topics}_{authors}_{use_recommendations}"
+                        
+                        if cache_key in DEEP_SEARCH_DATES:
+                            # Get next 30 days from last search
+                            last_end = DEEP_SEARCH_DATES[cache_key]
+                            next_start = last_end - timedelta(days=1)
+                            print(f"🔍 Previous deep search ended at {last_end.strftime('%Y-%m-%d')}, starting next search from {next_start.strftime('%Y-%m-%d')}")
+                        else:
+                            # First deep search - use current date
+                            next_start = None
+                            print(f"🔍 First deep search - starting from most recent papers")
+                        
+                        deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                        
+                        # Update the last search date (30 days back from start)
+                        if next_start is None:
+                            next_start = datetime.now()
+                        DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
+                        print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                         
                         # Filter out already rated papers
                         filtered_deep = []
@@ -810,7 +842,27 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         current_cache_size = len(PAPER_CACHE[cache_key].get("mixed", []))
                         if current_cache_size < 40:
                             print(f"🔍 Cache has only {current_cache_size} papers (<40), triggering DEEP SEARCH...")
-                            deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                            
+                            # Get the next date range for deep search
+                            from datetime import datetime, timedelta
+                            
+                            if cache_key in DEEP_SEARCH_DATES:
+                                # Get next 30 days from last search
+                                last_end = DEEP_SEARCH_DATES[cache_key]
+                                next_start = last_end - timedelta(days=1)
+                                print(f"🔍 Previous deep search ended at {last_end.strftime('%Y-%m-%d')}, starting next search from {next_start.strftime('%Y-%m-%d')}")
+                            else:
+                                # First deep search - use current date
+                                next_start = None
+                                print(f"🔍 First deep search - starting from most recent papers")
+                            
+                            deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                            
+                            # Update the last search date (30 days back from start)
+                            if next_start is None:
+                                next_start = datetime.now()
+                            DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
+                            print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                             
                             # Filter out already rated papers
                             filtered_deep = []
@@ -941,7 +993,26 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             # Run deep search in background
             async def run_deep_search():
                 try:
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    # Get the next date range for deep search
+                    from datetime import datetime, timedelta
+                    
+                    if cache_key in DEEP_SEARCH_DATES:
+                        # Get next 30 days from last search
+                        last_end = DEEP_SEARCH_DATES[cache_key]
+                        next_start = last_end - timedelta(days=1)
+                        print(f"🔍 Previous deep search ended at {last_end.strftime('%Y-%m-%d')}, starting next search from {next_start.strftime('%Y-%m-%d')}")
+                    else:
+                        # First deep search - use current date
+                        next_start = None
+                        print(f"🔍 First deep search - starting from most recent papers")
+                    
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    
+                    # Update the last search date (30 days back from start)
+                    if next_start is None:
+                        next_start = datetime.now()
+                    DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
+                    print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                     
                     # Filter out already rated papers
                     filtered_deep = []
@@ -996,7 +1067,27 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             # Run deep search in background
             async def run_deep_search():
                 try:
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    # Get the next date range for deep search
+                    from datetime import datetime, timedelta
+                    cache_key = f"{topics}_{authors}_{use_recommendations}"
+                    
+                    if cache_key in DEEP_SEARCH_DATES:
+                        # Get next 30 days from last search
+                        last_end = DEEP_SEARCH_DATES[cache_key]
+                        next_start = last_end - timedelta(days=1)
+                        print(f"🔍 Previous deep search ended at {last_end.strftime('%Y-%m-%d')}, starting next search from {next_start.strftime('%Y-%m-%d')}")
+                    else:
+                        # First deep search - use current date
+                        next_start = None
+                        print(f"🔍 First deep search - starting from most recent papers")
+                    
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    
+                    # Update the last search date (30 days back from start)
+                    if next_start is None:
+                        next_start = datetime.now()
+                    DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
+                    print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                     
                     # Filter out already rated papers
                     filtered_deep = []
@@ -1131,7 +1222,26 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
             # Run deep search in background
             async def run_deep_search():
                 try:
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200)
+                    # Get the next date range for deep search
+                    from datetime import datetime, timedelta
+                    
+                    if cache_key in DEEP_SEARCH_DATES:
+                        # Get next 30 days from last search
+                        last_end = DEEP_SEARCH_DATES[cache_key]
+                        next_start = last_end - timedelta(days=1)
+                        print(f"🔍 Previous deep search ended at {last_end.strftime('%Y-%m-%d')}, starting next search from {next_start.strftime('%Y-%m-%d')}")
+                    else:
+                        # First deep search - use current date
+                        next_start = None
+                        print(f"🔍 First deep search - starting from most recent papers")
+                    
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    
+                    # Update the last search date (30 days back from start)
+                    if next_start is None:
+                        next_start = datetime.now()
+                    DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
+                    print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                     
                     # Filter out already rated papers
                     filtered_deep = []
