@@ -1553,6 +1553,7 @@ async def log_card_visible(card_number: str = Form(...), paper_id: str = Form(..
 async def log_second_to_last_card(card_number: str = Form(...), paper_id: str = Form(...), total_cards: str = Form(...)):
     """Log when user views the second-to-last card"""
     print(f"🔔 SECOND-TO-LAST CARD: User viewing card #{card_number} (Paper ID: {paper_id}) - {int(total_cards)-1} of {total_cards} cards")
+    print(f"🔄 Auto-triggering 'Load More Papers' for infinite scroll...")
     return {"status": "success"}
 
 @app.get("/proxy")

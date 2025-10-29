@@ -187,8 +187,15 @@
                                 const allCards = document.querySelectorAll('.paper-card');
                                 const currentIndex = Array.from(allCards).indexOf(card);
                                 if (currentIndex === allCards.length - 2) {
-                                    console.log(`🔔 SECOND-TO-LAST CARD: Viewing card #${cardNumber} (${currentIndex + 1} of ${allCards.length})`);
+                                    console.log(`🔔 SECOND-TO-LAST CARD: Viewing card #${cardNumber} (${currentIndex + 1} of ${allCards.length}) - Auto-loading more papers...`);
                                     logSecondToLastCard(cardNumber, paperId, allCards.length);
+                                    
+                                    // Automatically trigger load more papers
+                                    const loadMoreBtn = document.getElementById('loadMoreBtn');
+                                    if (loadMoreBtn && !loadMoreBtn.disabled) {
+                                        console.log('🔄 Auto-triggering "Load More Papers"...');
+                                        loadMorePapers();
+                                    }
                                 }
                             }
                         }
