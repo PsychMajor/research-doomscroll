@@ -53,14 +53,18 @@ body {
     gap: 12px;
 }
 
-/* Divider with toggle - just a simple clickable line */
+/* Divider with toggle - clickable line with small arrow */
 .divider-with-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0;
     margin: 16px 0;
     cursor: pointer;
     user-select: none;
 }
 
 .divider-line {
+    flex: 1;
     height: 1px;
     background: rgba(56, 68, 77, 0.6);
     transition: background 0.3s ease;
@@ -70,11 +74,30 @@ body {
     background: rgba(29, 161, 242, 0.4);
 }
 
+.divider-arrow {
+    background: transparent;
+    border: none;
+    color: rgba(136, 153, 166, 0.6);
+    padding: 0 8px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.3s ease;
+}
+
+.divider-with-toggle:hover .divider-arrow {
+    color: #1da1f2;
+    transform: scale(1.2);
+}
+
 .filter-info-group {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 12px 0;
+}
+
+.filter-info-group.centered {
+    justify-content: center;
 }
 
 /* User info styles */
@@ -365,6 +388,10 @@ body {
     overflow: hidden;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
     opacity: 1;
+}
+
+.active-filters-content.centered {
+    justify-content: center;
 }
 
 .active-filters-content.collapsed {

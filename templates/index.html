@@ -45,10 +45,14 @@
             {% if topics or authors %}
             <div class="divider-with-toggle" onclick="toggleSearchForm()">
                 <div class="divider-line"></div>
+                <button class="divider-arrow">
+                    <span class="toggle-icon" id="toggleIcon">▲</span>
+                </button>
+                <div class="divider-line"></div>
             </div>
             {% endif %}
             
-            {% if show_form %}
+            {% if topics %}
             <div class="search-form-wrapper" id="searchFormWrapper">
                 <form class="search-form" method="POST" action="/profile/save" onsubmit="showFeedLoader()">
                 <div class="profile-header">
@@ -96,11 +100,11 @@
             
             {% if topics %}
             <div class="active-filters-wrapper">
-                <div class="filter-info-group">
+                <div class="filter-info-group centered">
                     <span class="filter-label">Current feed:</span>
                     <span class="filter-tag">{{ topics }}</span>
                 </div>
-                <div class="active-filters-content" id="filtersContent">
+                <div class="active-filters-content centered" id="filtersContent">
                     {% if feedback %}
                     <span class="feedback-stats" id="feedbackStats">
                         <span id="likedCount">{{ feedback.liked|length }}</span>&nbsp;liked · <span id="dislikedCount">{{ feedback.disliked|length }}</span>&nbsp;disliked
