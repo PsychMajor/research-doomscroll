@@ -34,7 +34,7 @@
                     {% if user and user.id %}
                         <div class="user-info">
                             <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
-                            <span class="user-name">{{ user.name or user.email }}</span>
+                            <span class="user-name">Welcome {{ user.name.split()[0] if user.name else user.email.split('@')[0] }}</span>
                             <a href="/logout" class="btn-logout">Logout</a>
                         </div>
                     {% else %}

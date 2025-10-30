@@ -12,6 +12,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # Connection pool
 pool = None
 
+# In-memory storage for when database is not available
+MEMORY_USERS = {}  # email -> {id, email, name, picture_url}
+MEMORY_USER_ID_COUNTER = 1
+
 async def init_db():
     """Initialize database connection pool and create tables"""
     global pool
@@ -94,8 +98,27 @@ async def close_db():
 # User functions
 async def create_or_update_user(email: str, name: str = None, picture_url: str = None) -> Optional[int]:
     """Create or update user and return user_id"""
+    global MEMORY_USER_ID_COUNTER
+    
     if not pool:
-        return None
+        # Use in-memory storage
+        if email not in MEMORY_USERS:
+            MEMORY_USERS[email] = {
+                'id': MEMORY_USER_ID_COUNTER,
+                'email': email,
+                'name': name,
+                'picture_url': picture_url
+            }
+            user_id = MEMORY_USER_ID_COUNTER
+            MEMORY_USER_ID_COUNTER += 1
+        else:
+            # Update existing user
+            MEMORY_USERS[email]['name'] = name
+            MEMORY_USERS[email]['picture_url'] = picture_url
+            user_id = MEMORY_USERS[email]['id']
+        
+        print(f"✅ In-memory user created/updated: {email} (ID: {user_id})")
+        return user_id
     
     try:
         async with pool.acquire() as conn:
@@ -117,7 +140,14 @@ async def create_or_update_user(email: str, name: str = None, picture_url: str =
 
 async def get_user_by_id(user_id: int) -> Optional[Dict]:
     """Get user by ID"""
-    if not pool or not user_id:
+    if not pool:
+        # Use in-memory storage
+        for user in MEMORY_USERS.values():
+            if user['id'] == user_id:
+                return user
+        return None
+    
+    if not user_id:
         return None
     
     try:

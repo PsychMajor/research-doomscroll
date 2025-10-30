@@ -2,9 +2,6 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
-from authlib.integrations.starlette_client import OAuth
-from dotenv import load_dotenv
 import requests
 import os
 import json
@@ -12,24 +9,7 @@ import asyncio
 from pathlib import Path
 import database
 
-# Load environment variables from .env file
-load_dotenv()
-
 app = FastAPI()
-
-# Add session middleware for OAuth
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production-use-python-secrets")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-
-# Configure OAuth
-oauth = OAuth()
-oauth.register(
-    name='google',
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
 
 @app.on_event("startup")
 async def startup_event():
@@ -144,29 +124,6 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
-def get_current_user(request: Request):
-    """Get current logged-in user from session"""
-    return {
-        'id': request.session.get('user_id'),
-        'email': request.session.get('user_email'),
-        'name': request.session.get('user_name'),
-        'picture': request.session.get('user_picture')
-    }
-
-def build_biorxiv_query(topics="", authors=""):
-    """Build a bioRxiv search query combining topics and author names"""
-    query_parts = []
-    
-    if topics:
-        query_parts.append(topics)
-    
-    if authors:
-        # Add individual author names (last names work best with bioRxiv format: "Last, First")
-        author_list = [a.strip() for a in authors.split(',') if a.strip()]
-        query_parts.extend(author_list)
-    
-    return ", ".join(query_parts) if query_parts else ""
-
 async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None, incremental_callback=None):
     """Fetch ALL pages (cursors > 100) from bioRxiv for 30 days starting from start_date
     
@@ -239,12 +196,11 @@ async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None,
                             try:
                                 title = paper_data.get("title", "").lower()
                                 abstract = paper_data.get("abstract", "").lower()
-                                author_str = paper_data.get("authors", "").lower()
                                 
                                 matches = False
                                 for term in query_terms.split(","):
                                     term_clean = term.strip().lower()
-                                    if term_clean and (term_clean in title or term_clean in abstract or term_clean in author_str):
+                                    if term_clean and (term_clean in title or term_clean in abstract):
                                         matches = True
                                         break
                                 
@@ -447,15 +403,6 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False, in
                                         matches = True
                                         break
                                 
-                                # Also check authors field for author name matches
-                                if not matches and paper_data.get("authors"):
-                                    author_str = paper_data.get("authors", "").lower()
-                                    for term in query_terms.split(","):
-                                        term_clean = term.strip().lower()
-                                        if term_clean and term_clean in author_str:
-                                            matches = True
-                                            break
-                                
                                 if matches:
                                     local_matches += 1
                                     
@@ -578,63 +525,11 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False, in
         print("=" * 60)
         return []
 
-# Authentication routes
-@app.get("/login")
-async def login(request: Request):
-    """Redirect to Google OAuth login"""
-    if not os.environ.get("GOOGLE_CLIENT_ID"):
-        return HTMLResponse("<h1>Google OAuth not configured</h1><p>Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.</p>")
-    
-    redirect_uri = request.url_for('auth_callback')
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-@app.get("/auth/callback")
-async def auth_callback(request: Request):
-    """Handle Google OAuth callback"""
-    try:
-        token = await oauth.google.authorize_access_token(request)
-        user_info = token.get('userinfo')
-        
-        if not user_info:
-            return RedirectResponse(url='/?error=auth_failed')
-        
-        # Save user to database
-        user_id = await database.create_or_update_user(
-            email=user_info['email'],
-            name=user_info.get('name'),
-            picture_url=user_info.get('picture')
-        )
-        
-        # Store user info in session
-        request.session['user_id'] = user_id
-        request.session['user_email'] = user_info['email']
-        request.session['user_name'] = user_info.get('name')
-        request.session['user_picture'] = user_info.get('picture')
-        
-        print(f"✅ User logged in: {user_info['email']}")
-        return RedirectResponse(url='/')
-    
-    except Exception as e:
-        print(f"❌ OAuth error: {e}")
-        return RedirectResponse(url='/?error=auth_error')
-
-@app.get("/logout")
-async def logout(request: Request):
-    """Log out user"""
-    request.session.clear()
-    return RedirectResponse(url='/')
-
 @app.get("/", response_class=HTMLResponse)
 async def get_paper(request: Request, topics: str = "", authors: str = "", use_recommendations: bool = False):
-    # Get current user
-    user = get_current_user(request)
-    print(f"🔍 DEBUG: User object = {user}")
-    print(f"🔍 DEBUG: Session = {dict(request.session)}")
-    user_id = user['id']
-    
-    # Load saved profile and feedback for this user
-    profile = await database.load_profile(user_id=user_id)
-    feedback = await database.load_feedback(user_id=user_id)
+    # Load saved profile and feedback
+    profile = await database.load_profile()
+    feedback = await database.load_feedback()
     
     # If no search parameters provided, check if we have a saved profile
     if not topics and not authors:
@@ -651,8 +546,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 "topics": "",
                 "authors": "",
                 "profile": profile,
-                "feedback": feedback,
-                "user": user
+                "feedback": feedback
             })
     
     # Check if we should use recommendations instead of search
@@ -732,8 +626,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 "authors": authors,
                 "profile": profile,
                 "feedback": feedback,
-                "using_recommendations": True,
-                "user": user
+                "using_recommendations": True
             })
             
         except Exception as e:
@@ -822,10 +715,9 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     
     # Always try to fetch from bioRxiv (regardless of Semantic Scholar status)
     # For quick initial display: first do a quick search of recent papers
-    biorxiv_query = build_biorxiv_query(topics, authors)
-    if biorxiv_query and len(papers) < 5:
+    if topics and len(papers) < 5:
         print(f"⚡ Quick fetch: Getting recent bioRxiv papers for fast display...")
-        quick_biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query, max_results=20, quick_mode=True)
+        quick_biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=20, quick_mode=True)
         
         # Filter out already rated papers
         for paper in quick_biorxiv_papers:
@@ -836,7 +728,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     
     # If we have at least 5 papers, we can return immediately for fast display
     # Then continue fetching more in the background for caching
-    if len(papers) >= 5 and biorxiv_query:
+    if len(papers) >= 5 and topics:
         import random
         random.shuffle(papers)
         
@@ -904,7 +796,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                 print(f"📦 INCREMENTAL (Background): Added {len(fresh_papers)} papers (total: {total_cached})")
                 
                 full_biorxiv_papers = await fetch_biorxiv_papers(
-                    biorxiv_query, 
+                    topics, 
                     max_results=100, 
                     quick_mode=False,
                     incremental_callback=cache_incrementally
@@ -951,7 +843,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                         print(f"📦 INCREMENTAL: Added {len(new_papers)} papers (total: {len(PAPER_CACHE[cache_key]['mixed'])})")
                         
                         deep_papers = await fetch_biorxiv_all_pages(
-                            biorxiv_query, max_results=200, start_date=next_start,
+                            topics, max_results=200, start_date=next_start,
                             incremental_callback=cache_incrementally
                         )
                         
@@ -961,6 +853,42 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
                         print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                         
+                        # Filter out already rated papers
+                        filtered_deep = []
+                        for paper in deep_papers:
+                            if paper["paperId"] not in rated_paper_ids:
+                                filtered_deep.append(paper)
+                        
+                        print(f"� DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
+                        
+                        # Combine with existing cache and remove duplicates
+                        existing_ids = set(p["paperId"] for p in cacheable_papers)
+                        new_deep_papers = []
+                        for paper in filtered_deep:
+                            if paper["paperId"] not in existing_ids:
+                                new_deep_papers.append(paper)
+                                existing_ids.add(paper["paperId"])
+                        
+                        if new_deep_papers:
+                            print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
+                            
+                            # Update cache with deep search results
+                            final_cache = cacheable_papers + new_deep_papers
+                            random.shuffle(final_cache)
+                            
+                            semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
+                            biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
+                            
+                            PAPER_CACHE[cache_key] = {
+                                "semantic_scholar": semantic_final,
+                                "biorxiv": biorxiv_final,
+                                "mixed": final_cache
+                            }
+                            print(f"📦 DEEP SEARCH: Final cache size: {len(final_cache)} papers")
+                            print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
+                            print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
+                        else:
+                            print(f"🔍 DEEP SEARCH: No additional papers found")
                 else:
                     print(f"�🔄 Background: No new papers found in extended search")
                     
@@ -984,7 +912,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                 next_start = None
                                 print(f"🔍 First deep search - starting from most recent papers")
                             
-                            deep_papers = await fetch_biorxiv_all_pages(biorxiv_query, max_results=200, start_date=next_start)
+                            deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
                             
                             # Update the last search date (30 days back from start)
                             if next_start is None:
@@ -1052,16 +980,15 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             "authors": authors,
             "profile": profile,
             "feedback": feedback,
-            "info_message": semantic_error,
-            "user": user
+            "info_message": semantic_error
         })
     
     # Otherwise, do a full fetch if we don't have enough papers yet
-    if biorxiv_query and len(papers) < 20:
-        print(f"Fetching bioRxiv papers for query: {biorxiv_query}")
+    if topics and len(papers) < 20:
+        print(f"Fetching bioRxiv papers for topics: {topics}")
         # Fetch many more papers to have extras for caching (fetch up to 100 from bioRxiv)
         fetch_limit = 100
-        biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query, max_results=fetch_limit, quick_mode=False)
+        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit, quick_mode=False)
         
         # Filter out already rated papers - but DON'T limit here, collect them all
         filtered_biorxiv = []
@@ -1085,8 +1012,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             "topics": topics,
             "authors": authors,
             "profile": profile,
-            "feedback": feedback,
-            "user": user
+            "feedback": feedback
         })
     
     # Shuffle all papers before splitting
@@ -1117,7 +1043,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         print(f"📦 Total cache entries: {len(PAPER_CACHE)}")
         
         # Check if we need deep search for subsequent searches - specifically for bioRxiv cache
-        if len(biorxiv_papers) < 40 and biorxiv_query:
+        if len(biorxiv_papers) < 40 and topics:
             print(f"🔍 bioRxiv cache has only {len(biorxiv_papers)} papers (<40), triggering DEEP SEARCH for subsequent searches...")
             
             # Run deep search in background
@@ -1136,7 +1062,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         next_start = None
                         print(f"🔍 First deep search - starting from most recent papers")
                     
-                    deep_papers = await fetch_biorxiv_all_pages(biorxiv_query, max_results=200, start_date=next_start)
+                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
                     
                     # Update the last search date (30 days back from start)
                     if next_start is None:
@@ -1249,7 +1175,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     
                     # Fetch with incremental callback
                     deep_papers = await fetch_biorxiv_all_pages(
-                        biorxiv_query, 
+                        topics, 
                         max_results=200, 
                         start_date=next_start,
                         incremental_callback=cache_incrementally
@@ -1289,8 +1215,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         "authors": authors,
         "profile": profile,
         "feedback": feedback,
-        "info_message": semantic_error,  # Show info if Semantic Scholar failed but we have bioRxiv papers
-        "user": user
+        "info_message": semantic_error  # Show info if Semantic Scholar failed but we have bioRxiv papers
     })
 
 @app.get("/api/papers")
@@ -1408,9 +1333,8 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
                                     print(f"📦 INCREMENTAL: Added {len(new_papers)} papers to cache (total: {total_cached})")
                     
                     # Fetch with incremental callback
-                    biorxiv_query_for_deep = build_biorxiv_query(topics, authors)
                     deep_papers = await fetch_biorxiv_all_pages(
-                        biorxiv_query_for_deep, 
+                        topics, 
                         max_results=200, 
                         start_date=next_start,
                         incremental_callback=cache_incrementally
@@ -1509,10 +1433,9 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
     
     # Fetch from bioRxiv if needed
     papers_needed = 20 - len(papers)
-    biorxiv_query_for_load = build_biorxiv_query(topics, authors)
-    if biorxiv_query_for_load and papers_needed > 0:
+    if topics and papers_needed > 0:
         fetch_limit = max(papers_needed * 3, 60)
-        biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query_for_load, max_results=fetch_limit)
+        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit)
         
         filtered_biorxiv = []
         for paper in biorxiv_papers:
@@ -1530,15 +1453,12 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
     return {"papers": papers, "count": len(papers), "from_cache": False}
 
 @app.post("/profile/save")
-async def save_profile_endpoint(request: Request, topics: str = Form(""), authors: str = Form("")):
+async def save_profile_endpoint(topics: str = Form(""), authors: str = Form("")):
     """Save user profile"""
-    user = get_current_user(request)
-    user_id = user['id']
-    
     topics_list = [t.strip() for t in topics.split(',') if t.strip()]
     authors_list = [a.strip() for a in authors.split(',') if a.strip()]
     
-    await database.save_profile(topics_list, authors_list, user_id=user_id)
+    await database.save_profile(topics_list, authors_list)
     
     # Redirect to home with the saved interests
     if topics or authors:
@@ -1546,59 +1466,76 @@ async def save_profile_endpoint(request: Request, topics: str = Form(""), author
     return RedirectResponse(url="/", status_code=303)
 
 @app.get("/profile")
-async def get_profile(request: Request):
+async def get_profile():
     """Get current profile as JSON"""
-    user = get_current_user(request)
-    return await database.load_profile(user_id=user['id'])
+    return await database.load_profile()
 
 @app.post("/profile/clear")
-async def clear_profile(request: Request):
+async def clear_profile():
     """Clear saved profile"""
-    user = get_current_user(request)
-    await database.save_profile([], [], user_id=user['id'])
+    await database.save_profile([], [])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/paper/like")
-async def like_paper(request: Request, paper_id: str = Form(...)):
+async def like_paper(paper_id: str = Form(...)):
     """Like a paper - add to positive feedback"""
-    user = get_current_user(request)
-    user_id = user['id']
+    feedback = await database.load_feedback()
     
-    await database.save_feedback(paper_id, "liked", user_id=user_id)
+    # Remove from disliked if present
+    if paper_id in feedback["disliked"]:
+        feedback["disliked"].remove(paper_id)
+    
+    # Add to liked if not already there
+    if paper_id not in feedback["liked"]:
+        feedback["liked"].append(paper_id)
+    
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "liked", "paper_id": paper_id}
 
 @app.post("/paper/unlike")
-async def unlike_paper(request: Request, paper_id: str = Form(...)):
+async def unlike_paper(paper_id: str = Form(...)):
     """Unlike a paper - remove from positive feedback"""
-    user = get_current_user(request)
-    user_id = user['id']
+    feedback = await database.load_feedback()
     
-    await database.delete_feedback(paper_id, user_id=user_id)
+    # Remove from liked if present
+    if paper_id in feedback["liked"]:
+        feedback["liked"].remove(paper_id)
+    
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "unliked", "paper_id": paper_id}
 
 @app.post("/paper/dislike")
-async def dislike_paper(request: Request, paper_id: str = Form(...)):
+async def dislike_paper(paper_id: str = Form(...)):
     """Dislike a paper - add to negative feedback"""
-    user = get_current_user(request)
-    user_id = user['id']
+    feedback = await database.load_feedback()
     
-    await database.save_feedback(paper_id, "disliked", user_id=user_id)
+    # Remove from liked if present
+    if paper_id in feedback["liked"]:
+        feedback["liked"].remove(paper_id)
+    
+    # Add to disliked if not already there
+    if paper_id not in feedback["disliked"]:
+        feedback["disliked"].append(paper_id)
+    
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "disliked", "paper_id": paper_id}
 
 @app.post("/paper/undislike")
-async def undislike_paper(request: Request, paper_id: str = Form(...)):
+async def undislike_paper(paper_id: str = Form(...)):
     """Undislike a paper - remove from negative feedback"""
-    user = get_current_user(request)
-    user_id = user['id']
+    feedback = await database.load_feedback()
     
-    await database.delete_feedback(paper_id, user_id=user_id)
+    # Remove from disliked if present
+    if paper_id in feedback["disliked"]:
+        feedback["disliked"].remove(paper_id)
+    
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "undisliked", "paper_id": paper_id}
 
 @app.get("/feedback")
-async def get_feedback(request: Request):
+async def get_feedback():
     """Get current feedback statistics"""
-    user = get_current_user(request)
-    feedback = await database.load_feedback(user_id=user['id'])
+    feedback = await database.load_feedback()
     return {
         "liked_count": len(feedback["liked"]),
         "disliked_count": len(feedback["disliked"]),
@@ -1607,24 +1544,25 @@ async def get_feedback(request: Request):
     }
 
 @app.post("/feedback/clear")
-async def clear_feedback(request: Request):
+async def clear_feedback():
     """Clear all feedback"""
-    user = get_current_user(request)
-    await database.clear_all_feedback(user_id=user['id'])
+    await database.save_feedback([], [])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/liked")
-async def clear_liked(request: Request):
+async def clear_liked():
     """Clear only liked papers"""
-    user = get_current_user(request)
-    await database.clear_all_feedback(action="liked", user_id=user['id'])
+    feedback = await database.load_feedback()
+    feedback["liked"] = []
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/disliked")
-async def clear_disliked(request: Request):
+async def clear_disliked():
     """Clear only disliked papers"""
-    user = get_current_user(request)
-    await database.clear_all_feedback(action="disliked", user_id=user['id'])
+    feedback = await database.load_feedback()
+    feedback["disliked"] = []
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/card/visible")
