@@ -93,7 +93,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 0;
+    padding: 4px 0;
 }
 
 .filter-info-group.centered {
@@ -371,8 +371,8 @@ body {
 /* Active Filters */
 /* Active Filters Section */
 .active-filters-wrapper {
-    margin-top: 16px;
-    padding-top: 16px;
+    margin-top: 8px;
+    padding-top: 8px;
 }
 
 /* Active filters header removed - now using divider-with-toggle */
@@ -382,7 +382,7 @@ body {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding-top: 8px;
+    padding-top: 4px;
     max-height: 200px;
     overflow: hidden;
     transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
