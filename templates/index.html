@@ -195,12 +195,12 @@
                 const observerOptions = {
                     root: null, // viewport
                     rootMargin: '0px',
-                    threshold: 1.0 // 100% visible
+                    threshold: 0.75 // 75% visible (more lenient for mobile)
                 };
 
                 observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
-                        if (entry.isIntersecting && entry.intersectionRatio >= 1.0) {
+                        if (entry.isIntersecting && entry.intersectionRatio >= 0.75) {
                             const card = entry.target;
                             const cardNumber = card.dataset.cardNumber;
                             const paperId = card.dataset.paperId;
