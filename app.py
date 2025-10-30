@@ -707,7 +707,6 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     # Then continue fetching more in the background for caching
     if len(papers) >= 5 and topics:
         import random
-        import asyncio
         random.shuffle(papers)
         
         # Display first 5-20 papers immediately
