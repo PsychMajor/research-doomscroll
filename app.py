@@ -124,12 +124,19 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
-async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None):
+async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None, incremental_callback=None):
     """Fetch ALL pages (cursors > 100) from bioRxiv for 30 days starting from start_date
     
     This is called when cache is low (<40 papers) to ensure comprehensive coverage.
     If start_date is None, uses current date (most recent papers).
     If start_date is provided, fetches 30 days starting from that date going backwards.
+    
+    Args:
+        query_terms: Search terms to match
+        max_results: Maximum papers to return
+        start_date: Start date for search (searches backwards 30 days from this)
+        incremental_callback: Optional async function to call with papers as they're found
+                             Signature: async def callback(papers_batch: list)
     """
     import asyncio
     import aiohttp
@@ -245,6 +252,13 @@ async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None)
                                 
                                 if new_count // 10 > old_count // 10:
                                     print(f"🔍 DEEP SEARCH Progress: {new_count} matching papers found...")
+                        
+                        # Call incremental callback if provided (cache papers as we find them)
+                        if incremental_callback and page_papers:
+                            try:
+                                await incremental_callback(page_papers)
+                            except Exception as callback_error:
+                                print(f"⚠️  WARNING: Incremental callback failed: {callback_error}")
                         
                 except asyncio.TimeoutError:
                     print(f"⏱️  TIMEOUT: Deep search timeout for {date_str} cursor {cursor}")
@@ -797,7 +811,24 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                             next_start = None
                             print(f"🔍 First deep search - starting from most recent papers")
                         
-                        deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                        # Incremental callback for caching
+                        incremental_lock = asyncio.Lock()
+                        async def cache_incrementally(papers_batch):
+                            async with incremental_lock:
+                                filtered = [p for p in papers_batch if p["paperId"] not in rated_paper_ids]
+                                if filtered:
+                                    existing_ids = set(p["paperId"] for p in PAPER_CACHE[cache_key]["mixed"])
+                                    new_papers = [p for p in filtered if p["paperId"] not in existing_ids]
+                                    if new_papers:
+                                        PAPER_CACHE[cache_key]["mixed"].extend(new_papers)
+                                        biorxiv_new = [p for p in new_papers if p['source'] == 'bioRxiv']
+                                        PAPER_CACHE[cache_key]["biorxiv"].extend(biorxiv_new)
+                                        print(f"📦 INCREMENTAL: Added {len(new_papers)} papers (total: {len(PAPER_CACHE[cache_key]['mixed'])})")
+                        
+                        deep_papers = await fetch_biorxiv_all_pages(
+                            topics, max_results=200, start_date=next_start,
+                            incremental_callback=cache_incrementally
+                        )
                         
                         # Update the last search date (30 days back from start)
                         if next_start is None:
@@ -1090,7 +1121,48 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         next_start = None
                         print(f"🔍 First deep search - starting from most recent papers")
                     
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    # Track papers incrementally
+                    incremental_papers = []
+                    incremental_lock = asyncio.Lock()
+                    
+                    # Callback to cache papers as they're found
+                    async def cache_incrementally(papers_batch):
+                        async with incremental_lock:
+                            # Filter out already rated papers
+                            for paper in papers_batch:
+                                if paper["paperId"] not in rated_paper_ids:
+                                    incremental_papers.append(paper)
+                            
+                            # Update cache with new papers
+                            displayed_ids = set(p["paperId"] for p in displayed_papers)
+                            new_papers = [p for p in incremental_papers if p["paperId"] not in displayed_ids]
+                            
+                            if new_papers:
+                                import random
+                                random.shuffle(new_papers)
+                                
+                                # Update or create cache
+                                if cache_key not in PAPER_CACHE:
+                                    PAPER_CACHE[cache_key] = {
+                                        "semantic_scholar": [],
+                                        "biorxiv": [],
+                                        "mixed": []
+                                    }
+                                
+                                # Add new papers to cache
+                                biorxiv_new = [p for p in new_papers if p['source'] == 'bioRxiv']
+                                PAPER_CACHE[cache_key]["biorxiv"].extend(biorxiv_new)
+                                PAPER_CACHE[cache_key]["mixed"].extend(new_papers)
+                                
+                                print(f"📦 INCREMENTAL: Added {len(new_papers)} papers to cache (total: {len(PAPER_CACHE[cache_key]['mixed'])})")
+                    
+                    # Fetch with incremental callback
+                    deep_papers = await fetch_biorxiv_all_pages(
+                        topics, 
+                        max_results=200, 
+                        start_date=next_start,
+                        incremental_callback=cache_incrementally
+                    )
                     
                     # Update the last search date (30 days back from start)
                     if next_start is None:
@@ -1098,41 +1170,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
                     print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                     
-                    # Filter out already rated papers
-                    filtered_deep = []
-                    for paper in deep_papers:
-                        if paper["paperId"] not in rated_paper_ids:
-                            filtered_deep.append(paper)
-                    
-                    print(f"🔍 DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
-                    
-                    # Remove duplicates with displayed papers
-                    displayed_ids = set(p["paperId"] for p in displayed_papers)
-                    new_deep_papers = []
-                    for paper in filtered_deep:
-                        if paper["paperId"] not in displayed_ids:
-                            new_deep_papers.append(paper)
-                    
-                    if new_deep_papers:
-                        print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
-                        
-                        # Create cache with deep search results
-                        random.shuffle(new_deep_papers)
-                        
-                        semantic_final = [p for p in new_deep_papers if p['source'] == 'Semantic Scholar']
-                        biorxiv_final = [p for p in new_deep_papers if p['source'] == 'bioRxiv']
-                        
-                        cache_key = f"{topics}_{authors}_{use_recommendations}"
-                        PAPER_CACHE[cache_key] = {
-                            "semantic_scholar": semantic_final,
-                            "biorxiv": biorxiv_final,
-                            "mixed": new_deep_papers
-                        }
-                        print(f"📦 DEEP SEARCH: Created cache with {len(new_deep_papers)} papers")
-                        print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
-                        print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
-                    else:
-                        print(f"🔍 DEEP SEARCH: No additional papers found")
+                    print(f"🔍 DEEP SEARCH Complete: Total {len(incremental_papers)} papers found and cached")
                 
                 except Exception as e:
                     print(f"❌ DEEP SEARCH ERROR: {type(e).__name__}: {e}")
@@ -1244,7 +1282,46 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
                         next_start = None
                         print(f"🔍 First deep search - starting from most recent papers")
                     
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    # Track papers incrementally
+                    incremental_lock = asyncio.Lock()
+                    
+                    # Callback to cache papers as they're found
+                    async def cache_incrementally(papers_batch):
+                        async with incremental_lock:
+                            # Filter out already rated papers
+                            filtered_batch = [p for p in papers_batch if p["paperId"] not in rated_paper_ids]
+                            
+                            if filtered_batch:
+                                # Get current cache or initialize
+                                current_cache = PAPER_CACHE.get(cache_key, {}).get("mixed", [])
+                                existing_ids = set(p["paperId"] for p in current_cache)
+                                
+                                # Add only new papers
+                                new_papers = [p for p in filtered_batch if p["paperId"] not in existing_ids]
+                                
+                                if new_papers:
+                                    # Update cache
+                                    if cache_key not in PAPER_CACHE:
+                                        PAPER_CACHE[cache_key] = {
+                                            "semantic_scholar": [],
+                                            "biorxiv": [],
+                                            "mixed": []
+                                        }
+                                    
+                                    PAPER_CACHE[cache_key]["mixed"].extend(new_papers)
+                                    biorxiv_new = [p for p in new_papers if p['source'] == 'bioRxiv']
+                                    PAPER_CACHE[cache_key]["biorxiv"].extend(biorxiv_new)
+                                    
+                                    total_cached = len(PAPER_CACHE[cache_key]["mixed"])
+                                    print(f"📦 INCREMENTAL: Added {len(new_papers)} papers to cache (total: {total_cached})")
+                    
+                    # Fetch with incremental callback
+                    deep_papers = await fetch_biorxiv_all_pages(
+                        topics, 
+                        max_results=200, 
+                        start_date=next_start,
+                        incremental_callback=cache_incrementally
+                    )
                     
                     # Update the last search date (30 days back from start)
                     if next_start is None:
@@ -1252,44 +1329,8 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
                     DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
                     print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                     
-                    # Filter out already rated papers
-                    filtered_deep = []
-                    for paper in deep_papers:
-                        if paper["paperId"] not in rated_paper_ids:
-                            filtered_deep.append(paper)
-                    
-                    print(f"🔍 DEEP SEARCH (LOAD MORE): Got {len(filtered_deep)} papers from additional pages")
-                    
-                    # Combine with existing cache and remove duplicates
-                    current_cache = PAPER_CACHE.get(cache_key, {}).get("mixed", [])
-                    existing_ids = set(p["paperId"] for p in current_cache)
-                    new_deep_papers = []
-                    for paper in filtered_deep:
-                        if paper["paperId"] not in existing_ids:
-                            new_deep_papers.append(paper)
-                            existing_ids.add(paper["paperId"])
-                    
-                    if new_deep_papers:
-                        print(f"🔍 DEEP SEARCH (LOAD MORE): Found {len(new_deep_papers)} NEW papers from deep search")
-                        
-                        # Update cache with deep search results
-                        final_cache = current_cache + new_deep_papers
-                        import random
-                        random.shuffle(final_cache)
-                        
-                        semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
-                        biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
-                        
-                        PAPER_CACHE[cache_key] = {
-                            "semantic_scholar": semantic_final,
-                            "biorxiv": biorxiv_final,
-                            "mixed": final_cache
-                        }
-                        print(f"📦 DEEP SEARCH (LOAD MORE): Final cache size: {len(final_cache)} papers")
-                        print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
-                        print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
-                    else:
-                        print(f"🔍 DEEP SEARCH (LOAD MORE): No additional papers found")
+                    final_count = len(PAPER_CACHE.get(cache_key, {}).get("mixed", []))
+                    print(f"🔍 DEEP SEARCH (LOAD MORE) Complete: Final cache has {final_count} papers")
                 
                 except Exception as e:
                     print(f"❌ DEEP SEARCH (LOAD MORE) ERROR: {type(e).__name__}: {e}")
