@@ -100,11 +100,9 @@
             
             {% if topics %}
             <div class="active-filters-wrapper">
-                <div class="filter-info-group centered">
+                <div class="active-filters-content centered" id="filtersContent">
                     <span class="filter-label">Current feed:</span>
                     <span class="filter-tag">{{ topics }}</span>
-                </div>
-                <div class="active-filters-content centered" id="filtersContent">
                     {% if feedback %}
                     <span class="feedback-stats" id="feedbackStats">
                         <span id="likedCount">{{ feedback.liked|length }}</span>&nbsp;liked · <span id="dislikedCount">{{ feedback.disliked|length }}</span>&nbsp;disliked
