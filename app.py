@@ -7,8 +7,15 @@ import os
 import json
 import asyncio
 from pathlib import Path
+import database
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection pool on startup"""
+    await database.init_db()
+    print("✅ Database initialized")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -108,48 +115,6 @@ def generate_tldr(abstract):
         except:
             pass
         return None
-
-def load_profile():
-    """Load user profile from file"""
-    try:
-        if PROFILE_FILE.exists():
-            with open(PROFILE_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"⚠️  Could not load profile: {e}")
-    return {"topics": [], "authors": []}
-
-def save_profile(topics_list, authors_list):
-    """Save user profile to file"""
-    profile = {
-        "topics": topics_list,
-        "authors": authors_list
-    }
-    try:
-        with open(PROFILE_FILE, 'w') as f:
-            json.dump(profile, f, indent=2)
-    except Exception as e:
-        print(f"⚠️  Could not save profile: {e}")
-    return profile
-
-def load_feedback():
-    """Load user feedback (likes/dislikes) from file"""
-    try:
-        if FEEDBACK_FILE.exists():
-            with open(FEEDBACK_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"⚠️  Could not load feedback: {e}")
-    return {"liked": [], "disliked": []}
-
-def save_feedback(feedback_data):
-    """Save user feedback to file"""
-    try:
-        with open(FEEDBACK_FILE, 'w') as f:
-            json.dump(feedback_data, f, indent=2)
-    except Exception as e:
-        print(f"⚠️  Could not save feedback: {e}")
-    return feedback_data
 
 def get_paper_id_from_url(url):
     """Extract paper ID from Semantic Scholar URL"""
@@ -540,8 +505,8 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
 @app.get("/", response_class=HTMLResponse)
 async def get_paper(request: Request, topics: str = "", authors: str = "", use_recommendations: bool = False):
     # Load saved profile and feedback
-    profile = load_profile()
-    feedback = load_feedback()
+    profile = await database.load_profile()
+    feedback = await database.load_feedback()
     
     # If no search parameters provided, check if we have a saved profile
     if not topics and not authors:
@@ -1216,7 +1181,7 @@ def get_papers_api():
 @app.get("/api/load-more")
 async def load_more_papers_api(topics: str = "", authors: str = "", use_recommendations: bool = False):
     """API endpoint to load more papers without page reload"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     rated_paper_ids = set(feedback["liked"] + feedback["disliked"])
     
     # Create cache key
@@ -1436,7 +1401,7 @@ async def save_profile_endpoint(topics: str = Form(""), authors: str = Form(""))
     topics_list = [t.strip() for t in topics.split(',') if t.strip()]
     authors_list = [a.strip() for a in authors.split(',') if a.strip()]
     
-    save_profile(topics_list, authors_list)
+    await database.save_profile(topics_list, authors_list)
     
     # Redirect to home with the saved interests
     if topics or authors:
@@ -1446,18 +1411,18 @@ async def save_profile_endpoint(topics: str = Form(""), authors: str = Form(""))
 @app.get("/profile")
 async def get_profile():
     """Get current profile as JSON"""
-    return load_profile()
+    return await database.load_profile()
 
 @app.post("/profile/clear")
 async def clear_profile():
     """Clear saved profile"""
-    save_profile([], [])
+    await database.save_profile([], [])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/paper/like")
 async def like_paper(paper_id: str = Form(...)):
     """Like a paper - add to positive feedback"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     
     # Remove from disliked if present
     if paper_id in feedback["disliked"]:
@@ -1467,25 +1432,25 @@ async def like_paper(paper_id: str = Form(...)):
     if paper_id not in feedback["liked"]:
         feedback["liked"].append(paper_id)
     
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "liked", "paper_id": paper_id}
 
 @app.post("/paper/unlike")
 async def unlike_paper(paper_id: str = Form(...)):
     """Unlike a paper - remove from positive feedback"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     
     # Remove from liked if present
     if paper_id in feedback["liked"]:
         feedback["liked"].remove(paper_id)
     
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "unliked", "paper_id": paper_id}
 
 @app.post("/paper/dislike")
 async def dislike_paper(paper_id: str = Form(...)):
     """Dislike a paper - add to negative feedback"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     
     # Remove from liked if present
     if paper_id in feedback["liked"]:
@@ -1495,25 +1460,25 @@ async def dislike_paper(paper_id: str = Form(...)):
     if paper_id not in feedback["disliked"]:
         feedback["disliked"].append(paper_id)
     
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "disliked", "paper_id": paper_id}
 
 @app.post("/paper/undislike")
 async def undislike_paper(paper_id: str = Form(...)):
     """Undislike a paper - remove from negative feedback"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     
     # Remove from disliked if present
     if paper_id in feedback["disliked"]:
         feedback["disliked"].remove(paper_id)
     
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return {"status": "success", "action": "undisliked", "paper_id": paper_id}
 
 @app.get("/feedback")
 async def get_feedback():
     """Get current feedback statistics"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     return {
         "liked_count": len(feedback["liked"]),
         "disliked_count": len(feedback["disliked"]),
@@ -1524,23 +1489,23 @@ async def get_feedback():
 @app.post("/feedback/clear")
 async def clear_feedback():
     """Clear all feedback"""
-    save_feedback({"liked": [], "disliked": []})
+    await database.save_feedback([], [])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/liked")
 async def clear_liked():
     """Clear only liked papers"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     feedback["liked"] = []
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/disliked")
 async def clear_disliked():
     """Clear only disliked papers"""
-    feedback = load_feedback()
+    feedback = await database.load_feedback()
     feedback["disliked"] = []
-    save_feedback(feedback)
+    await database.save_feedback(feedback["liked"], feedback["disliked"])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/card/visible")
