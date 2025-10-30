@@ -47,6 +47,69 @@ body {
     flex: 1;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* User Info Styles */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background-color: #1d2f3f;
+    border: 1px solid #38444d;
+    border-radius: 24px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid #1da1f2;
+}
+
+.user-name {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.btn-login, .btn-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background-color: #1da1f2;
+    color: #ffffff;
+    text-decoration: none;
+    border-radius: 24px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-login:hover, .btn-logout:hover {
+    background-color: #1a8cd8;
+    transform: translateY(-1px);
+}
+
+.btn-logout {
+    background-color: #192734;
+    border: 1px solid #38444d;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+
+.btn-logout:hover {
+    background-color: #253341;
+    border-color: #1da1f2;
+}
+
 .header h1 {
     font-size: 24px;
     font-weight: 800;

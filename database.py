@@ -26,10 +26,23 @@ async def init_db():
         
         # Create tables
         async with pool.acquire() as conn:
+            # Users table
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    name VARCHAR(255),
+                    picture_url TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    last_login TIMESTAMP DEFAULT NOW()
+                )
+            ''')
+            
             # User profiles table
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS profiles (
                     id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                     topics TEXT,
                     authors TEXT,
                     created_at TIMESTAMP DEFAULT NOW(),
@@ -41,9 +54,11 @@ async def init_db():
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS feedback (
                     id SERIAL PRIMARY KEY,
-                    paper_id TEXT UNIQUE NOT NULL,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    paper_id TEXT NOT NULL,
                     action TEXT NOT NULL, -- 'liked' or 'disliked'
-                    created_at TIMESTAMP DEFAULT NOW()
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(user_id, paper_id)
                 )
             ''')
             
@@ -59,6 +74,9 @@ async def init_db():
             ''')
             
             # Create indexes
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_paper_id ON feedback(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_key ON paper_cache(cache_key, source)')
             
@@ -73,15 +91,64 @@ async def close_db():
     if pool:
         await pool.close()
 
+# User functions
+async def create_or_update_user(email: str, name: str = None, picture_url: str = None) -> Optional[int]:
+    """Create or update user and return user_id"""
+    if not pool:
+        return None
+    
+    try:
+        async with pool.acquire() as conn:
+            # Upsert user
+            result = await conn.fetchrow('''
+                INSERT INTO users (email, name, picture_url, last_login)
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (email) 
+                DO UPDATE SET 
+                    name = EXCLUDED.name, 
+                    picture_url = EXCLUDED.picture_url, 
+                    last_login = NOW()
+                RETURNING id
+            ''', email, name, picture_url)
+            return result['id'] if result else None
+    except Exception as e:
+        print(f"⚠️  Error creating/updating user: {e}")
+        return None
+
+async def get_user_by_id(user_id: int) -> Optional[Dict]:
+    """Get user by ID"""
+    if not pool or not user_id:
+        return None
+    
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                'SELECT id, email, name, picture_url FROM users WHERE id = $1',
+                user_id
+            )
+            if row:
+                return dict(row)
+    except Exception as e:
+        print(f"⚠️  Error getting user: {e}")
+    
+    return None
+
 # Profile functions
-async def load_profile() -> Dict:
+async def load_profile(user_id: Optional[int] = None) -> Dict:
     """Load user profile from database"""
     if not pool:
         return {"topics": [], "authors": []}
     
     try:
         async with pool.acquire() as conn:
-            row = await conn.fetchrow('SELECT topics, authors FROM profiles ORDER BY updated_at DESC LIMIT 1')
+            if user_id:
+                row = await conn.fetchrow(
+                    'SELECT topics, authors FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                    user_id
+                )
+            else:
+                row = await conn.fetchrow('SELECT topics, authors FROM profiles ORDER BY updated_at DESC LIMIT 1')
+            
             if row:
                 return {
                     "topics": json.loads(row['topics']) if row['topics'] else [],
@@ -92,7 +159,7 @@ async def load_profile() -> Dict:
     
     return {"topics": [], "authors": []}
 
-async def save_profile(topics_list: List[str], authors_list: List[str]):
+async def save_profile(topics_list: List[str], authors_list: List[str], user_id: Optional[int] = None):
     """Save user profile to database"""
     if not pool:
         return
@@ -100,22 +167,29 @@ async def save_profile(topics_list: List[str], authors_list: List[str]):
     try:
         async with pool.acquire() as conn:
             await conn.execute('''
-                INSERT INTO profiles (topics, authors)
-                VALUES ($1, $2)
-            ''', json.dumps(topics_list), json.dumps(authors_list))
+                INSERT INTO profiles (user_id, topics, authors)
+                VALUES ($1, $2, $3)
+            ''', user_id, json.dumps(topics_list), json.dumps(authors_list))
         print("✅ Profile saved to database")
     except Exception as e:
         print(f"⚠️  Error saving profile: {e}")
 
 # Feedback functions
-async def load_feedback() -> Dict:
+async def load_feedback(user_id: Optional[int] = None) -> Dict:
     """Load user feedback from database"""
     if not pool:
         return {"liked": [], "disliked": []}
     
     try:
         async with pool.acquire() as conn:
-            rows = await conn.fetch('SELECT paper_id, action FROM feedback')
+            if user_id:
+                rows = await conn.fetch(
+                    'SELECT paper_id, action FROM feedback WHERE user_id = $1',
+                    user_id
+                )
+            else:
+                rows = await conn.fetch('SELECT paper_id, action FROM feedback')
+            
             liked = [row['paper_id'] for row in rows if row['action'] == 'liked']
             disliked = [row['paper_id'] for row in rows if row['action'] == 'disliked']
             return {"liked": liked, "disliked": disliked}
@@ -124,7 +198,7 @@ async def load_feedback() -> Dict:
     
     return {"liked": [], "disliked": []}
 
-async def save_feedback(paper_id: str, action: str):
+async def save_feedback(paper_id: str, action: str, user_id: Optional[int] = None):
     """Save feedback for a paper"""
     if not pool:
         return
@@ -132,35 +206,50 @@ async def save_feedback(paper_id: str, action: str):
     try:
         async with pool.acquire() as conn:
             await conn.execute('''
-                INSERT INTO feedback (paper_id, action)
-                VALUES ($1, $2)
-                ON CONFLICT (paper_id) DO UPDATE SET action = $2
-            ''', paper_id, action)
+                INSERT INTO feedback (user_id, paper_id, action)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id, paper_id) DO UPDATE SET action = $3
+            ''', user_id, paper_id, action)
     except Exception as e:
         print(f"⚠️  Error saving feedback: {e}")
 
-async def delete_feedback(paper_id: str):
+async def delete_feedback(paper_id: str, user_id: Optional[int] = None):
     """Delete feedback for a paper"""
     if not pool:
         return
     
     try:
         async with pool.acquire() as conn:
-            await conn.execute('DELETE FROM feedback WHERE paper_id = $1', paper_id)
+            if user_id:
+                await conn.execute(
+                    'DELETE FROM feedback WHERE paper_id = $1 AND user_id = $2',
+                    paper_id, user_id
+                )
+            else:
+                await conn.execute('DELETE FROM feedback WHERE paper_id = $1', paper_id)
     except Exception as e:
         print(f"⚠️  Error deleting feedback: {e}")
 
-async def clear_all_feedback(action: Optional[str] = None):
+async def clear_all_feedback(action: Optional[str] = None, user_id: Optional[int] = None):
     """Clear all feedback or specific action"""
     if not pool:
         return
     
     try:
         async with pool.acquire() as conn:
-            if action:
-                await conn.execute('DELETE FROM feedback WHERE action = $1', action)
+            if user_id:
+                if action:
+                    await conn.execute(
+                        'DELETE FROM feedback WHERE action = $1 AND user_id = $2',
+                        action, user_id
+                    )
+                else:
+                    await conn.execute('DELETE FROM feedback WHERE user_id = $1', user_id)
             else:
-                await conn.execute('DELETE FROM feedback')
+                if action:
+                    await conn.execute('DELETE FROM feedback WHERE action = $1', action)
+                else:
+                    await conn.execute('DELETE FROM feedback')
         print(f"✅ Cleared {'all' if not action else action} feedback from database")
     except Exception as e:
         print(f"⚠️  Error clearing feedback: {e}")

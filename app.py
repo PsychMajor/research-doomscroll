@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
 import requests
 import os
 import json
@@ -10,6 +12,20 @@ from pathlib import Path
 import database
 
 app = FastAPI()
+
+# Add session middleware for OAuth
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production-use-python-secrets")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+# Configure OAuth
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
 @app.on_event("startup")
 async def startup_event():
@@ -123,6 +139,15 @@ def get_paper_id_from_url(url):
     # URL format: https://www.semanticscholar.org/paper/{paper_id}
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
+
+def get_current_user(request: Request):
+    """Get current logged-in user from session"""
+    return {
+        'id': request.session.get('user_id'),
+        'email': request.session.get('user_email'),
+        'name': request.session.get('user_name'),
+        'picture': request.session.get('user_picture')
+    }
 
 def build_biorxiv_query(topics="", authors=""):
     """Build a bioRxiv search query combining topics and author names"""
@@ -549,11 +574,61 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False, in
         print("=" * 60)
         return []
 
+# Authentication routes
+@app.get("/login")
+async def login(request: Request):
+    """Redirect to Google OAuth login"""
+    if not os.environ.get("GOOGLE_CLIENT_ID"):
+        return HTMLResponse("<h1>Google OAuth not configured</h1><p>Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.</p>")
+    
+    redirect_uri = request.url_for('auth_callback')
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request):
+    """Handle Google OAuth callback"""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user_info = token.get('userinfo')
+        
+        if not user_info:
+            return RedirectResponse(url='/?error=auth_failed')
+        
+        # Save user to database
+        user_id = await database.create_or_update_user(
+            email=user_info['email'],
+            name=user_info.get('name'),
+            picture_url=user_info.get('picture')
+        )
+        
+        # Store user info in session
+        request.session['user_id'] = user_id
+        request.session['user_email'] = user_info['email']
+        request.session['user_name'] = user_info.get('name')
+        request.session['user_picture'] = user_info.get('picture')
+        
+        print(f"✅ User logged in: {user_info['email']}")
+        return RedirectResponse(url='/')
+    
+    except Exception as e:
+        print(f"❌ OAuth error: {e}")
+        return RedirectResponse(url='/?error=auth_error')
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Log out user"""
+    request.session.clear()
+    return RedirectResponse(url='/')
+
 @app.get("/", response_class=HTMLResponse)
 async def get_paper(request: Request, topics: str = "", authors: str = "", use_recommendations: bool = False):
-    # Load saved profile and feedback
-    profile = await database.load_profile()
-    feedback = await database.load_feedback()
+    # Get current user
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    # Load saved profile and feedback for this user
+    profile = await database.load_profile(user_id=user_id)
+    feedback = await database.load_feedback(user_id=user_id)
     
     # If no search parameters provided, check if we have a saved profile
     if not topics and not authors:
@@ -570,7 +645,8 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 "topics": "",
                 "authors": "",
                 "profile": profile,
-                "feedback": feedback
+                "feedback": feedback,
+                "user": user
             })
     
     # Check if we should use recommendations instead of search
@@ -650,7 +726,8 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                 "authors": authors,
                 "profile": profile,
                 "feedback": feedback,
-                "using_recommendations": True
+                "using_recommendations": True,
+                "user": user
             })
             
         except Exception as e:
@@ -969,7 +1046,8 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             "authors": authors,
             "profile": profile,
             "feedback": feedback,
-            "info_message": semantic_error
+            "info_message": semantic_error,
+            "user": user
         })
     
     # Otherwise, do a full fetch if we don't have enough papers yet
@@ -1001,7 +1079,8 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
             "topics": topics,
             "authors": authors,
             "profile": profile,
-            "feedback": feedback
+            "feedback": feedback,
+            "user": user
         })
     
     # Shuffle all papers before splitting
@@ -1204,7 +1283,8 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         "authors": authors,
         "profile": profile,
         "feedback": feedback,
-        "info_message": semantic_error  # Show info if Semantic Scholar failed but we have bioRxiv papers
+        "info_message": semantic_error,  # Show info if Semantic Scholar failed but we have bioRxiv papers
+        "user": user
     })
 
 @app.get("/api/papers")
@@ -1444,12 +1524,15 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
     return {"papers": papers, "count": len(papers), "from_cache": False}
 
 @app.post("/profile/save")
-async def save_profile_endpoint(topics: str = Form(""), authors: str = Form("")):
+async def save_profile_endpoint(request: Request, topics: str = Form(""), authors: str = Form("")):
     """Save user profile"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
     topics_list = [t.strip() for t in topics.split(',') if t.strip()]
     authors_list = [a.strip() for a in authors.split(',') if a.strip()]
     
-    await database.save_profile(topics_list, authors_list)
+    await database.save_profile(topics_list, authors_list, user_id=user_id)
     
     # Redirect to home with the saved interests
     if topics or authors:
@@ -1457,76 +1540,59 @@ async def save_profile_endpoint(topics: str = Form(""), authors: str = Form(""))
     return RedirectResponse(url="/", status_code=303)
 
 @app.get("/profile")
-async def get_profile():
+async def get_profile(request: Request):
     """Get current profile as JSON"""
-    return await database.load_profile()
+    user = get_current_user(request)
+    return await database.load_profile(user_id=user['id'])
 
 @app.post("/profile/clear")
-async def clear_profile():
+async def clear_profile(request: Request):
     """Clear saved profile"""
-    await database.save_profile([], [])
+    user = get_current_user(request)
+    await database.save_profile([], [], user_id=user['id'])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/paper/like")
-async def like_paper(paper_id: str = Form(...)):
+async def like_paper(request: Request, paper_id: str = Form(...)):
     """Like a paper - add to positive feedback"""
-    feedback = await database.load_feedback()
+    user = get_current_user(request)
+    user_id = user['id']
     
-    # Remove from disliked if present
-    if paper_id in feedback["disliked"]:
-        feedback["disliked"].remove(paper_id)
-    
-    # Add to liked if not already there
-    if paper_id not in feedback["liked"]:
-        feedback["liked"].append(paper_id)
-    
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    await database.save_feedback(paper_id, "liked", user_id=user_id)
     return {"status": "success", "action": "liked", "paper_id": paper_id}
 
 @app.post("/paper/unlike")
-async def unlike_paper(paper_id: str = Form(...)):
+async def unlike_paper(request: Request, paper_id: str = Form(...)):
     """Unlike a paper - remove from positive feedback"""
-    feedback = await database.load_feedback()
+    user = get_current_user(request)
+    user_id = user['id']
     
-    # Remove from liked if present
-    if paper_id in feedback["liked"]:
-        feedback["liked"].remove(paper_id)
-    
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    await database.delete_feedback(paper_id, user_id=user_id)
     return {"status": "success", "action": "unliked", "paper_id": paper_id}
 
 @app.post("/paper/dislike")
-async def dislike_paper(paper_id: str = Form(...)):
+async def dislike_paper(request: Request, paper_id: str = Form(...)):
     """Dislike a paper - add to negative feedback"""
-    feedback = await database.load_feedback()
+    user = get_current_user(request)
+    user_id = user['id']
     
-    # Remove from liked if present
-    if paper_id in feedback["liked"]:
-        feedback["liked"].remove(paper_id)
-    
-    # Add to disliked if not already there
-    if paper_id not in feedback["disliked"]:
-        feedback["disliked"].append(paper_id)
-    
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    await database.save_feedback(paper_id, "disliked", user_id=user_id)
     return {"status": "success", "action": "disliked", "paper_id": paper_id}
 
 @app.post("/paper/undislike")
-async def undislike_paper(paper_id: str = Form(...)):
+async def undislike_paper(request: Request, paper_id: str = Form(...)):
     """Undislike a paper - remove from negative feedback"""
-    feedback = await database.load_feedback()
+    user = get_current_user(request)
+    user_id = user['id']
     
-    # Remove from disliked if present
-    if paper_id in feedback["disliked"]:
-        feedback["disliked"].remove(paper_id)
-    
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    await database.delete_feedback(paper_id, user_id=user_id)
     return {"status": "success", "action": "undisliked", "paper_id": paper_id}
 
 @app.get("/feedback")
-async def get_feedback():
+async def get_feedback(request: Request):
     """Get current feedback statistics"""
-    feedback = await database.load_feedback()
+    user = get_current_user(request)
+    feedback = await database.load_feedback(user_id=user['id'])
     return {
         "liked_count": len(feedback["liked"]),
         "disliked_count": len(feedback["disliked"]),
@@ -1535,25 +1601,24 @@ async def get_feedback():
     }
 
 @app.post("/feedback/clear")
-async def clear_feedback():
+async def clear_feedback(request: Request):
     """Clear all feedback"""
-    await database.save_feedback([], [])
+    user = get_current_user(request)
+    await database.clear_all_feedback(user_id=user['id'])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/liked")
-async def clear_liked():
+async def clear_liked(request: Request):
     """Clear only liked papers"""
-    feedback = await database.load_feedback()
-    feedback["liked"] = []
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    user = get_current_user(request)
+    await database.clear_all_feedback(action="liked", user_id=user['id'])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/feedback/clear/disliked")
-async def clear_disliked():
+async def clear_disliked(request: Request):
     """Clear only disliked papers"""
-    feedback = await database.load_feedback()
-    feedback["disliked"] = []
-    await database.save_feedback(feedback["liked"], feedback["disliked"])
+    user = get_current_user(request)
+    await database.clear_all_feedback(action="disliked", user_id=user['id'])
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/card/visible")

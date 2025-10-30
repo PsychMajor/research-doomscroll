@@ -30,11 +30,22 @@
                     <h1>Research Doomscroll</h1>
                     <p class="subtitle">Infinite scroll through research papers</p>
                 </div>
-                {% if topics or authors %}
-                <button class="collapse-toggle" onclick="toggleSearchForm()">
-                    <span class="toggle-icon" id="toggleIcon">▲</span>
-                </button>
-                {% endif %}
+                <div class="header-actions">
+                    {% if user and user.id %}
+                        <div class="user-info">
+                            <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
+                            <span class="user-name">{{ user.name or user.email }}</span>
+                            <a href="/logout" class="btn-logout">Logout</a>
+                        </div>
+                    {% else %}
+                        <a href="/login" class="btn-login">Sign in with Google</a>
+                    {% endif %}
+                    {% if topics or authors %}
+                    <button class="collapse-toggle" onclick="toggleSearchForm()">
+                        <span class="toggle-icon" id="toggleIcon">▲</span>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
             
             {% if show_form %}
