@@ -42,6 +42,15 @@
                     {% endif %}
                 </div>
             </div>
+            {% if topics or authors %}
+            <div class="divider-with-toggle" onclick="toggleSearchForm()">
+                <div class="divider-line"></div>
+                <button class="divider-arrow">
+                    <span class="toggle-icon" id="toggleIcon">▲</span>
+                </button>
+                <div class="divider-line"></div>
+            </div>
+            {% endif %}
             
             {% if show_form %}
             <div class="search-form-wrapper" id="searchFormWrapper">

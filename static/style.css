@@ -373,7 +373,6 @@ body {
 .active-filters-wrapper {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #38444d;
 }
 
 /* Active filters header removed - now using divider-with-toggle */
