@@ -118,12 +118,14 @@ body {
     background-color: #192734;
     border: 1px solid #38444d;
     border-top: none;
+    border-radius: 0 0 12px 12px;
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px);
     transition: all 0.3s ease;
     z-index: 1000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
 }
 
 .nav-item-dropdown:hover .dropdown-menu {
@@ -145,6 +147,7 @@ body {
 
 .dropdown-item:last-child {
     border-bottom: none;
+    border-radius: 0 0 12px 12px;
 }
 
 .dropdown-item:hover {

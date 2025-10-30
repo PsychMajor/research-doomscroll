@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liked Papers - Research Doomscroll</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>Research Doomscroll</h1>
+                    <p class="subtitle">Your Liked Papers</p>
+                </div>
+                <div class="header-actions">
+                    {% if user and user.id %}
+                        <div class="user-info">
+                            <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
+                            <span class="user-name">Welcome {{ user.name.split()[0] if user.name else user.email.split('@')[0] }}</span>
+                            <a href="/logout" class="btn-logout">Logout</a>
+                        </div>
+                    {% else %}
+                        <a href="/login" class="btn-login">Sign in with Google</a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Navigation Menu -->
+            <nav class="nav-menu">
+                <a href="/" class="nav-item">Search</a>
+                <div class="nav-item-dropdown">
+                    <a href="/likes" class="nav-item active">Folders</a>
+                    <div class="dropdown-menu">
+                        <a href="/likes" class="dropdown-item">Likes</a>
+                    </div>
+                </div>
+                <a href="#Following" class="nav-item">Following</a>
+                <a href="#Recommended" class="nav-item">Recommended</a>
+                <a href="#Contact" class="nav-item">Contact</a>
+            </nav>
+        </header>
+
+        <div class="feed">
+            {% if papers %}
+            {% for paper in papers %}
+            <article class="paper-card" data-paper-id="{{ paper.paperId }}">
+                <div class="card-header">
+                    <div class="paper-meta">
+                        <h2 class="paper-title">{{ paper.title }}</h2>
+                        <div class="paper-info">
+                            {% if paper.authors %}
+                            <span class="authors">
+                                {% for author in paper.authors[:3] %}
+                                    {{ author.name }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if paper.authors|length > 3 %}
+                                    <span class="more-authors">+{{ paper.authors|length - 3 }} more</span>
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            <span class="separator">•</span>
+                            <span class="year">{{ paper.year }}</span>
+                            {% if paper.venue %}
+                            <span class="separator">•</span>
+                            <span class="venue">{{ paper.venue }}</span>
+                            {% endif %}
+                            {% if paper.citationCount %}
+                            <span class="separator">•</span>
+                            <span class="citations">{{ paper.citationCount }} citations</span>
+                            {% endif %}
+                            {% if paper.source %}
+                            <span class="separator">•</span>
+                            <span class="source-badge">{{ paper.source }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if paper.tldr %}
+                <div class="paper-tldr">
+                    <strong>TL;DR:</strong> {{ paper.tldr }}
+                </div>
+                {% endif %}
+
+                <div class="paper-abstract-container">
+                    <button class="abstract-toggle" onclick="toggleAbstract('{{ paper.paperId }}')">
+                        <span class="toggle-icon">▶</span>
+                        <span class="toggle-text">Abstract</span>
+                    </button>
+                    <div class="paper-abstract" id="abstract-{{ paper.paperId }}" style="display: none;">
+                        {% if paper.abstract %}
+                            {{ paper.abstract }}
+                        {% else %}
+                            <em class="no-abstract">No abstract available</em>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    {% if paper.url %}
+                    {% if paper.source == 'bioRxiv' %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on bioRxiv</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% else %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on Semantic Scholar</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% endif %}
+                    {% endif %}
+                    <div class="card-actions">
+                        <button class="like-btn active" onclick="unlikePaper('{{ paper.paperId }}', event)" title="Unlike this paper">
+                            <span class="like-text">Liked</span>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">♥</div>
+                <h2>No Liked Papers Yet</h2>
+                <p>Papers you like will appear here. <a href="/" style="color: #1da1f2;">Start exploring papers</a></p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function toggleAbstract(paperId) {
+            const abstract = document.getElementById(`abstract-${paperId}`);
+            const toggle = event.currentTarget;
+            const icon = toggle.querySelector('.toggle-icon');
+            
+            if (abstract.style.display === 'none') {
+                abstract.style.display = 'block';
+                icon.textContent = '▼';
+                toggle.classList.add('expanded');
+            } else {
+                abstract.style.display = 'none';
+                icon.textContent = '▶';
+                toggle.classList.remove('expanded');
+            }
+        }
+
+        async function unlikePaper(paperId, event) {
+            event.preventDefault();
+            try {
+                const formData = new FormData();
+                formData.append('paper_id', paperId);
+                
+                const response = await fetch('/unlike', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    // Remove the card from the page
+                    const card = event.target.closest('.paper-card');
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(-100%)';
+                    card.style.transition = 'all 0.3s ease';
+                    
+                    setTimeout(() => {
+                        card.remove();
+                        
+                        // Check if there are no more cards
+                        const remainingCards = document.querySelectorAll('.paper-card');
+                        if (remainingCards.length === 0) {
+                            // Show empty state
+                            document.querySelector('.feed').innerHTML = `
+                                <div class="empty-state">
+                                    <div class="empty-icon">♥</div>
+                                    <h2>No Liked Papers Yet</h2>
+                                    <p>Papers you like will appear here. <a href="/" style="color: #1da1f2;">Start exploring papers</a></p>
+                                </div>
+                            `;
+                        }
+                    }, 300);
+                }
+            } catch (error) {
+                console.error('Error unliking paper:', error);
+            }
+        }
+    </script>
+</body>
+</html>

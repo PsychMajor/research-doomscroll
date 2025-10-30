@@ -624,6 +624,36 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url='/')
 
+@app.get("/likes", response_class=HTMLResponse)
+async def get_likes(request: Request):
+    """Display all liked papers"""
+    # Get current user
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    # Load user's feedback
+    feedback = await database.load_feedback(user_id=user_id)
+    profile = await database.load_profile(user_id=user_id)
+    
+    # Get the liked paper IDs
+    liked_paper_ids = feedback.get('liked', [])
+    
+    # Fetch paper details for liked papers
+    # We'll need to reconstruct the papers from cached data or fetch fresh
+    papers = []
+    
+    # For now, return the template with liked paper IDs
+    # The actual paper data would need to be fetched from the APIs
+    return templates.TemplateResponse("likes.html", {
+        "request": request,
+        "user": user,
+        "papers": papers,
+        "liked_paper_ids": liked_paper_ids,
+        "feedback": feedback,
+        "profile": profile,
+        "show_form": False
+    })
+
 @app.get("/", response_class=HTMLResponse)
 async def get_paper(request: Request, topics: str = "", authors: str = "", use_recommendations: bool = False):
     # Get current user
