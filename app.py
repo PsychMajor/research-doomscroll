@@ -124,6 +124,20 @@ def get_paper_id_from_url(url):
     parts = url.rstrip('/').split('/')
     return parts[-1] if parts else None
 
+def build_biorxiv_query(topics="", authors=""):
+    """Build a bioRxiv search query combining topics and author names"""
+    query_parts = []
+    
+    if topics:
+        query_parts.append(topics)
+    
+    if authors:
+        # Add individual author names (last names work best with bioRxiv format: "Last, First")
+        author_list = [a.strip() for a in authors.split(',') if a.strip()]
+        query_parts.extend(author_list)
+    
+    return ", ".join(query_parts) if query_parts else ""
+
 async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None, incremental_callback=None):
     """Fetch ALL pages (cursors > 100) from bioRxiv for 30 days starting from start_date
     
@@ -725,9 +739,10 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     
     # Always try to fetch from bioRxiv (regardless of Semantic Scholar status)
     # For quick initial display: first do a quick search of recent papers
-    if topics and len(papers) < 5:
+    biorxiv_query = build_biorxiv_query(topics, authors)
+    if biorxiv_query and len(papers) < 5:
         print(f"⚡ Quick fetch: Getting recent bioRxiv papers for fast display...")
-        quick_biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=20, quick_mode=True)
+        quick_biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query, max_results=20, quick_mode=True)
         
         # Filter out already rated papers
         for paper in quick_biorxiv_papers:
@@ -738,7 +753,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
     
     # If we have at least 5 papers, we can return immediately for fast display
     # Then continue fetching more in the background for caching
-    if len(papers) >= 5 and topics:
+    if len(papers) >= 5 and biorxiv_query:
         import random
         random.shuffle(papers)
         
@@ -806,7 +821,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                 print(f"📦 INCREMENTAL (Background): Added {len(fresh_papers)} papers (total: {total_cached})")
                 
                 full_biorxiv_papers = await fetch_biorxiv_papers(
-                    topics, 
+                    biorxiv_query, 
                     max_results=100, 
                     quick_mode=False,
                     incremental_callback=cache_incrementally
@@ -853,7 +868,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                         print(f"📦 INCREMENTAL: Added {len(new_papers)} papers (total: {len(PAPER_CACHE[cache_key]['mixed'])})")
                         
                         deep_papers = await fetch_biorxiv_all_pages(
-                            topics, max_results=200, start_date=next_start,
+                            biorxiv_query, max_results=200, start_date=next_start,
                             incremental_callback=cache_incrementally
                         )
                         
@@ -886,7 +901,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                                 next_start = None
                                 print(f"🔍 First deep search - starting from most recent papers")
                             
-                            deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                            deep_papers = await fetch_biorxiv_all_pages(biorxiv_query, max_results=200, start_date=next_start)
                             
                             # Update the last search date (30 days back from start)
                             if next_start is None:
@@ -958,11 +973,11 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         })
     
     # Otherwise, do a full fetch if we don't have enough papers yet
-    if topics and len(papers) < 20:
-        print(f"Fetching bioRxiv papers for topics: {topics}")
+    if biorxiv_query and len(papers) < 20:
+        print(f"Fetching bioRxiv papers for query: {biorxiv_query}")
         # Fetch many more papers to have extras for caching (fetch up to 100 from bioRxiv)
         fetch_limit = 100
-        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit, quick_mode=False)
+        biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query, max_results=fetch_limit, quick_mode=False)
         
         # Filter out already rated papers - but DON'T limit here, collect them all
         filtered_biorxiv = []
@@ -1017,7 +1032,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         print(f"📦 Total cache entries: {len(PAPER_CACHE)}")
         
         # Check if we need deep search for subsequent searches - specifically for bioRxiv cache
-        if len(biorxiv_papers) < 40 and topics:
+        if len(biorxiv_papers) < 40 and biorxiv_query:
             print(f"🔍 bioRxiv cache has only {len(biorxiv_papers)} papers (<40), triggering DEEP SEARCH for subsequent searches...")
             
             # Run deep search in background
@@ -1036,7 +1051,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         next_start = None
                         print(f"🔍 First deep search - starting from most recent papers")
                     
-                    deep_papers = await fetch_biorxiv_all_pages(topics, max_results=200, start_date=next_start)
+                    deep_papers = await fetch_biorxiv_all_pages(biorxiv_query, max_results=200, start_date=next_start)
                     
                     # Update the last search date (30 days back from start)
                     if next_start is None:
@@ -1149,7 +1164,7 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                     
                     # Fetch with incremental callback
                     deep_papers = await fetch_biorxiv_all_pages(
-                        topics, 
+                        biorxiv_query, 
                         max_results=200, 
                         start_date=next_start,
                         incremental_callback=cache_incrementally
@@ -1307,8 +1322,9 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
                                     print(f"📦 INCREMENTAL: Added {len(new_papers)} papers to cache (total: {total_cached})")
                     
                     # Fetch with incremental callback
+                    biorxiv_query_for_deep = build_biorxiv_query(topics, authors)
                     deep_papers = await fetch_biorxiv_all_pages(
-                        topics, 
+                        biorxiv_query_for_deep, 
                         max_results=200, 
                         start_date=next_start,
                         incremental_callback=cache_incrementally
@@ -1407,9 +1423,10 @@ async def load_more_papers_api(topics: str = "", authors: str = "", use_recommen
     
     # Fetch from bioRxiv if needed
     papers_needed = 20 - len(papers)
-    if topics and papers_needed > 0:
+    biorxiv_query_for_load = build_biorxiv_query(topics, authors)
+    if biorxiv_query_for_load and papers_needed > 0:
         fetch_limit = max(papers_needed * 3, 60)
-        biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=fetch_limit)
+        biorxiv_papers = await fetch_biorxiv_papers(biorxiv_query_for_load, max_results=fetch_limit)
         
         filtered_biorxiv = []
         for paper in biorxiv_papers:
