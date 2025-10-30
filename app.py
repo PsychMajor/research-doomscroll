@@ -328,13 +328,15 @@ async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None,
         traceback.print_exc()
         return []
 
-async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
+async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False, incremental_callback=None):
     """Fetch papers from bioRxiv API - only fetches cursor=0 (first 100 papers) from each day
     
     Args:
         query_terms: Search terms
         max_results: Maximum number of papers to return
         quick_mode: If True, only search recent days for faster initial results
+        incremental_callback: Optional async function to call with papers as they're found
+                             Signature: async def callback(papers_batch: list)
     """
     import asyncio
     import aiohttp
@@ -457,6 +459,13 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False):
                             
                             if new_milestone > old_milestone:
                                 print(f"🔍 Progress: {new_count} matching papers found so far...")
+                        
+                        # Call incremental callback if provided (cache papers as we find them)
+                        if incremental_callback and range_papers:
+                            try:
+                                await incremental_callback(range_papers)
+                            except Exception as callback_error:
+                                print(f"⚠️  WARNING: Incremental callback failed: {callback_error}")
                         
                 except asyncio.TimeoutError:
                     print(f"⏱️  TIMEOUT: bioRxiv request timed out for {start_date}")
@@ -751,51 +760,59 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
         async def background_fetch():
             try:
                 print(f"🔄 Background: Starting full 30-day fetch for caching...")
-                full_biorxiv_papers = await fetch_biorxiv_papers(topics, max_results=100, quick_mode=False)
                 
-                # Filter out already rated papers
-                filtered_full = []
-                for paper in full_biorxiv_papers:
-                    if paper["paperId"] not in rated_paper_ids:
-                        filtered_full.append(paper)
+                cache_key = f"{topics}_{authors}_{use_recommendations}"
+                incremental_lock = asyncio.Lock()
                 
-                print(f"🔄 Background: Got {len(filtered_full)} papers from full 30-day search")
+                # Callback to cache papers as they're found during background fetch
+                async def cache_incrementally(papers_batch):
+                    async with incremental_lock:
+                        # Filter out already rated papers
+                        filtered = [p for p in papers_batch if p["paperId"] not in rated_paper_ids]
+                        
+                        if filtered:
+                            # Get current cache or initialize
+                            if cache_key not in PAPER_CACHE:
+                                PAPER_CACHE[cache_key] = {
+                                    "semantic_scholar": [],
+                                    "biorxiv": [],
+                                    "mixed": []
+                                }
+                            
+                            # Filter out already displayed papers
+                            displayed_ids = set(p["paperId"] for p in displayed_papers)
+                            new_papers = [p for p in filtered if p["paperId"] not in displayed_ids]
+                            
+                            # Filter out papers already in cache
+                            existing_ids = set(p["paperId"] for p in PAPER_CACHE[cache_key]["mixed"])
+                            fresh_papers = [p for p in new_papers if p["paperId"] not in existing_ids]
+                            
+                            if fresh_papers:
+                                PAPER_CACHE[cache_key]["mixed"].extend(fresh_papers)
+                                biorxiv_new = [p for p in fresh_papers if p['source'] == 'bioRxiv']
+                                PAPER_CACHE[cache_key]["biorxiv"].extend(biorxiv_new)
+                                
+                                total_cached = len(PAPER_CACHE[cache_key]["mixed"])
+                                print(f"📦 INCREMENTAL (Background): Added {len(fresh_papers)} papers (total: {total_cached})")
                 
-                # Combine with existing papers and remove duplicates
-                seen_ids = set(p["paperId"] for p in papers)
-                additional_papers = []
-                for paper in filtered_full:
-                    if paper["paperId"] not in seen_ids:
-                        additional_papers.append(paper)
-                        seen_ids.add(paper["paperId"])
+                full_biorxiv_papers = await fetch_biorxiv_papers(
+                    topics, 
+                    max_results=100, 
+                    quick_mode=False,
+                    incremental_callback=cache_incrementally
+                )
                 
-                if additional_papers:
-                    print(f"🔄 Background: Found {len(additional_papers)} NEW papers from extended search")
-                    
-                    # Update cache with all papers (old + new)
-                    all_papers = papers + additional_papers
-                    random.shuffle(all_papers)
-                    
-                    # Remove the ones already displayed
-                    displayed_ids = set(p["paperId"] for p in displayed_papers)
-                    cacheable_papers = [p for p in all_papers if p["paperId"] not in displayed_ids]
-                    
-                    semantic_papers_cache = [p for p in cacheable_papers if p['source'] == 'Semantic Scholar']
-                    biorxiv_papers_cache = [p for p in cacheable_papers if p['source'] == 'bioRxiv']
-                    
-                    cache_key = f"{topics}_{authors}_{use_recommendations}"
-                    PAPER_CACHE[cache_key] = {
-                        "semantic_scholar": semantic_papers_cache,
-                        "biorxiv": biorxiv_papers_cache,
-                        "mixed": cacheable_papers
-                    }
-                    print(f"📦 Background: Updated cache with {len(cacheable_papers)} total papers")
-                    print(f"   📚 Semantic Scholar: {len(semantic_papers_cache)} papers")
-                    print(f"   🧬 bioRxiv: {len(biorxiv_papers_cache)} papers")
+                print(f"🔄 Background: Full 30-day fetch complete, found {len(full_biorxiv_papers)} total papers")
+                
+                # Check final cache size to see if we need deep search
+                if cache_key in PAPER_CACHE:
+                    biorxiv_cache_size = len(PAPER_CACHE[cache_key].get("biorxiv", []))
+                    total_cache_size = len(PAPER_CACHE[cache_key].get("mixed", []))
+                    print(f"📦 Background: Final cache size: {total_cache_size} papers ({biorxiv_cache_size} bioRxiv)")
                     
                     # Check if we need deep search - specifically for bioRxiv cache
-                    if len(biorxiv_papers_cache) < 40:
-                        print(f"🔍 bioRxiv cache has only {len(biorxiv_papers_cache)} papers (<40), triggering DEEP SEARCH...")
+                    if biorxiv_cache_size < 40:
+                        print(f"🔍 bioRxiv cache has only {biorxiv_cache_size} papers (<40), triggering DEEP SEARCH...")
                         
                         # Get the next date range for deep search
                         from datetime import datetime, timedelta
@@ -836,42 +853,6 @@ async def get_paper(request: Request, topics: str = "", authors: str = "", use_r
                         DEEP_SEARCH_DATES[cache_key] = next_start - timedelta(days=29)
                         print(f"🔍 Updated deep search tracker: next search will start from {DEEP_SEARCH_DATES[cache_key].strftime('%Y-%m-%d')}")
                         
-                        # Filter out already rated papers
-                        filtered_deep = []
-                        for paper in deep_papers:
-                            if paper["paperId"] not in rated_paper_ids:
-                                filtered_deep.append(paper)
-                        
-                        print(f"� DEEP SEARCH: Got {len(filtered_deep)} papers from additional pages")
-                        
-                        # Combine with existing cache and remove duplicates
-                        existing_ids = set(p["paperId"] for p in cacheable_papers)
-                        new_deep_papers = []
-                        for paper in filtered_deep:
-                            if paper["paperId"] not in existing_ids:
-                                new_deep_papers.append(paper)
-                                existing_ids.add(paper["paperId"])
-                        
-                        if new_deep_papers:
-                            print(f"🔍 DEEP SEARCH: Found {len(new_deep_papers)} NEW papers from deep search")
-                            
-                            # Update cache with deep search results
-                            final_cache = cacheable_papers + new_deep_papers
-                            random.shuffle(final_cache)
-                            
-                            semantic_final = [p for p in final_cache if p['source'] == 'Semantic Scholar']
-                            biorxiv_final = [p for p in final_cache if p['source'] == 'bioRxiv']
-                            
-                            PAPER_CACHE[cache_key] = {
-                                "semantic_scholar": semantic_final,
-                                "biorxiv": biorxiv_final,
-                                "mixed": final_cache
-                            }
-                            print(f"📦 DEEP SEARCH: Final cache size: {len(final_cache)} papers")
-                            print(f"   📚 Semantic Scholar: {len(semantic_final)} papers")
-                            print(f"   🧬 bioRxiv: {len(biorxiv_final)} papers")
-                        else:
-                            print(f"🔍 DEEP SEARCH: No additional papers found")
                 else:
                     print(f"�🔄 Background: No new papers found in extended search")
                     
