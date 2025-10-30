@@ -45,10 +45,6 @@
             {% if topics or authors %}
             <div class="divider-with-toggle" onclick="toggleSearchForm()">
                 <div class="divider-line"></div>
-                <button class="divider-toggle">
-                    <span class="toggle-icon" id="toggleIcon">▲</span>
-                </button>
-                <div class="divider-line"></div>
             </div>
             {% endif %}
             
@@ -100,16 +96,9 @@
             
             {% if topics %}
             <div class="active-filters-wrapper">
-                <div class="divider-with-toggle" onclick="toggleFilters()">
-                    <div class="divider-line"></div>
-                    <div class="filter-info-group">
-                        <span class="filter-label">Current feed:</span>
-                        <span class="filter-tag">{{ topics }}</span>
-                    </div>
-                    <button class="divider-toggle" id="filterToggleBtn">
-                        <span id="filterToggleIcon">▼</span>
-                    </button>
-                    <div class="divider-line"></div>
+                <div class="filter-info-group">
+                    <span class="filter-label">Current feed:</span>
+                    <span class="filter-tag">{{ topics }}</span>
                 </div>
                 <div class="active-filters-content" id="filtersContent">
                     {% if feedback %}
@@ -725,17 +714,6 @@
                 <h3>Personalized Recommendations</h3>
                 <p>These papers are recommended based on your liked papers</p>
             </div>
-        </div>
-        {% endif %}
-
-        {% if papers %}
-        <div class="divider-with-toggle" onclick="toggleFeed()">
-            <div class="divider-line"></div>
-            <h2 class="feed-title">Research Feed</h2>
-            <button class="divider-toggle" id="feedToggleBtn">
-                <span class="toggle-icon" id="feedToggleIcon">▼</span>
-            </button>
-            <div class="divider-line"></div>
         </div>
         {% endif %}
 
