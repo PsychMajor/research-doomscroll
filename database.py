@@ -15,6 +15,8 @@ pool = None
 # In-memory storage for when database is not available
 MEMORY_USERS = {}  # email -> {id, email, name, picture_url}
 MEMORY_USER_ID_COUNTER = 1
+MEMORY_PROFILES = {}  # user_id -> {topics: [], authors: []}
+MEMORY_FEEDBACK = {}  # user_id -> {paper_id: action}
 
 async def init_db():
     """Initialize database connection pool and create tables"""
@@ -167,6 +169,9 @@ async def get_user_by_id(user_id: int) -> Optional[Dict]:
 async def load_profile(user_id: Optional[int] = None) -> Dict:
     """Load user profile from database"""
     if not pool:
+        # Use in-memory storage
+        if user_id and user_id in MEMORY_PROFILES:
+            return MEMORY_PROFILES[user_id]
         return {"topics": [], "authors": []}
     
     try:
@@ -192,6 +197,13 @@ async def load_profile(user_id: Optional[int] = None) -> Dict:
 async def save_profile(topics_list: List[str], authors_list: List[str], user_id: Optional[int] = None):
     """Save user profile to database"""
     if not pool:
+        # Use in-memory storage
+        if user_id:
+            MEMORY_PROFILES[user_id] = {
+                "topics": topics_list,
+                "authors": authors_list
+            }
+            print(f"✅ Profile saved to memory for user {user_id}")
         return
     
     try:
@@ -208,6 +220,12 @@ async def save_profile(topics_list: List[str], authors_list: List[str], user_id:
 async def load_feedback(user_id: Optional[int] = None) -> Dict:
     """Load user feedback from database"""
     if not pool:
+        # Use in-memory storage
+        if user_id and user_id in MEMORY_FEEDBACK:
+            user_feedback = MEMORY_FEEDBACK[user_id]
+            liked = [pid for pid, action in user_feedback.items() if action == 'liked']
+            disliked = [pid for pid, action in user_feedback.items() if action == 'disliked']
+            return {"liked": liked, "disliked": disliked}
         return {"liked": [], "disliked": []}
     
     try:
@@ -231,6 +249,12 @@ async def load_feedback(user_id: Optional[int] = None) -> Dict:
 async def save_feedback(paper_id: str, action: str, user_id: Optional[int] = None):
     """Save feedback for a paper"""
     if not pool:
+        # Use in-memory storage
+        if user_id:
+            if user_id not in MEMORY_FEEDBACK:
+                MEMORY_FEEDBACK[user_id] = {}
+            MEMORY_FEEDBACK[user_id][paper_id] = action
+            print(f"✅ Feedback saved to memory: user {user_id}, paper {paper_id}, action {action}")
         return
     
     try:
@@ -246,6 +270,10 @@ async def save_feedback(paper_id: str, action: str, user_id: Optional[int] = Non
 async def delete_feedback(paper_id: str, user_id: Optional[int] = None):
     """Delete feedback for a paper"""
     if not pool:
+        # Use in-memory storage
+        if user_id and user_id in MEMORY_FEEDBACK and paper_id in MEMORY_FEEDBACK[user_id]:
+            del MEMORY_FEEDBACK[user_id][paper_id]
+            print(f"✅ Feedback deleted from memory: user {user_id}, paper {paper_id}")
         return
     
     try:
@@ -263,6 +291,18 @@ async def delete_feedback(paper_id: str, user_id: Optional[int] = None):
 async def clear_all_feedback(action: Optional[str] = None, user_id: Optional[int] = None):
     """Clear all feedback or specific action"""
     if not pool:
+        # Use in-memory storage
+        if user_id and user_id in MEMORY_FEEDBACK:
+            if action:
+                # Remove only specific action
+                MEMORY_FEEDBACK[user_id] = {
+                    pid: act for pid, act in MEMORY_FEEDBACK[user_id].items() 
+                    if act != action
+                }
+            else:
+                # Clear all feedback for user
+                MEMORY_FEEDBACK[user_id] = {}
+            print(f"✅ Cleared {'all' if not action else action} feedback from memory for user {user_id}")
         return
     
     try:

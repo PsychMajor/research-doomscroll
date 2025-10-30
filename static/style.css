@@ -53,7 +53,55 @@ body {
     gap: 12px;
 }
 
-/* User Info Styles */
+/* Divider with embedded toggle arrow */
+.divider-with-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        rgba(56, 68, 77, 0) 0%, 
+        rgba(56, 68, 77, 0.6) 50%, 
+        rgba(56, 68, 77, 0) 100%);
+}
+
+.divider-toggle {
+    background-color: #1d2f3f;
+    border: 1px solid #38444d;
+    color: #1da1f2;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.divider-toggle:hover {
+    background-color: rgba(29, 161, 242, 0.1);
+    border-color: #1da1f2;
+    transform: scale(1.1);
+}
+
+.filter-info-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* User info styles */
 .user-info {
     display: flex;
     align-items: center;
@@ -329,13 +377,7 @@ body {
     border-top: 1px solid #38444d;
 }
 
-.active-filters-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    padding-bottom: 12px;
-}
+/* Active filters header removed - now using divider-with-toggle */
 
 .active-filters-content {
     display: flex;
@@ -584,23 +626,14 @@ body {
 }
 
 /* Feed Styles */
-.feed-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    background-color: #192734;
-    border-bottom: 1px solid #38444d;
-    border-top: 1px solid #38444d;
-    position: relative;
-    z-index: 10;
-}
+/* Feed header removed - now using divider-with-toggle */
 
 .feed-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     color: #ffffff;
     margin: 0;
+    flex-shrink: 0;
 }
 
 .feed-toggle {

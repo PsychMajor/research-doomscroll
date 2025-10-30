@@ -628,8 +628,6 @@ async def logout(request: Request):
 async def get_paper(request: Request, topics: str = "", authors: str = "", use_recommendations: bool = False):
     # Get current user
     user = get_current_user(request)
-    print(f"🔍 DEBUG: User object = {user}")
-    print(f"🔍 DEBUG: Session = {dict(request.session)}")
     user_id = user['id']
     
     # Load saved profile and feedback for this user

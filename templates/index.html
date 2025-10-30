@@ -40,13 +40,17 @@
                     {% else %}
                         <a href="/login" class="btn-login">Sign in with Google</a>
                     {% endif %}
-                    {% if topics or authors %}
-                    <button class="collapse-toggle" onclick="toggleSearchForm()">
-                        <span class="toggle-icon" id="toggleIcon">▲</span>
-                    </button>
-                    {% endif %}
                 </div>
             </div>
+            {% if topics or authors %}
+            <div class="divider-with-toggle" onclick="toggleSearchForm()">
+                <div class="divider-line"></div>
+                <button class="divider-toggle">
+                    <span class="toggle-icon" id="toggleIcon">▲</span>
+                </button>
+                <div class="divider-line"></div>
+            </div>
+            {% endif %}
             
             {% if show_form %}
             <div class="search-form-wrapper" id="searchFormWrapper">
@@ -96,12 +100,16 @@
             
             {% if topics %}
             <div class="active-filters-wrapper">
-                <div class="active-filters-header">
-                    <span class="filter-label">Current feed:</span>
-                    <span class="filter-tag">{{ topics }}</span>
-                    <button class="filter-toggle" onclick="toggleFilters()" id="filterToggleBtn">
+                <div class="divider-with-toggle" onclick="toggleFilters()">
+                    <div class="divider-line"></div>
+                    <div class="filter-info-group">
+                        <span class="filter-label">Current feed:</span>
+                        <span class="filter-tag">{{ topics }}</span>
+                    </div>
+                    <button class="divider-toggle" id="filterToggleBtn">
                         <span id="filterToggleIcon">▼</span>
                     </button>
+                    <div class="divider-line"></div>
                 </div>
                 <div class="active-filters-content" id="filtersContent">
                     {% if feedback %}
@@ -721,11 +729,13 @@
         {% endif %}
 
         {% if papers %}
-        <div class="feed-header">
+        <div class="divider-with-toggle" onclick="toggleFeed()">
+            <div class="divider-line"></div>
             <h2 class="feed-title">Research Feed</h2>
-            <button class="feed-toggle" onclick="toggleFeed()" id="feedToggleBtn">
+            <button class="divider-toggle" id="feedToggleBtn">
                 <span class="toggle-icon" id="feedToggleIcon">▼</span>
             </button>
+            <div class="divider-line"></div>
         </div>
         {% endif %}
 
