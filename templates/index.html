@@ -144,7 +144,7 @@
             // Global observer for visibility tracking
             let observer = null;
 
-            // Auto-collapse the form on page load if we have results
+            // Page load initialization
             window.addEventListener('DOMContentLoaded', function() {
                 // Hide initial page loader
                 const pageLoader = document.getElementById('pageLoader');
@@ -157,17 +157,7 @@
                     }, 500); // Show for at least 500ms
                 }
 
-                const hasPapers = {{ 'true' if papers else 'false' }};
-                const hasTopicsOrAuthors = {{ 'true' if topics else 'false' }};
-                
-                if (hasPapers && hasTopicsOrAuthors) {
-                    const wrapper = document.getElementById('searchFormWrapper');
-                    const icon = document.getElementById('toggleIcon');
-                    if (wrapper) {
-                        wrapper.classList.add('collapsed');
-                        if (icon) icon.textContent = '▼';
-                    }
-                }
+                // Don't auto-collapse - keep form visible so users can always access it
 
                 // Mark already rated papers
                 likedPapers.forEach(paperId => {
