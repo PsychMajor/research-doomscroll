@@ -4,12 +4,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
+from dotenv import load_dotenv
 import requests
 import os
 import json
 import asyncio
 from pathlib import Path
 import database
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
