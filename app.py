@@ -196,11 +196,12 @@ async def fetch_biorxiv_all_pages(query_terms, max_results=200, start_date=None,
                             try:
                                 title = paper_data.get("title", "").lower()
                                 abstract = paper_data.get("abstract", "").lower()
+                                author_str = paper_data.get("authors", "").lower()
                                 
                                 matches = False
                                 for term in query_terms.split(","):
                                     term_clean = term.strip().lower()
-                                    if term_clean and (term_clean in title or term_clean in abstract):
+                                    if term_clean and (term_clean in title or term_clean in abstract or term_clean in author_str):
                                         matches = True
                                         break
                                 
@@ -402,6 +403,15 @@ async def fetch_biorxiv_papers(query_terms, max_results=20, quick_mode=False, in
                                     if term_clean and (term_clean in title or term_clean in abstract):
                                         matches = True
                                         break
+                                
+                                # Also check authors field for author name matches
+                                if not matches and paper_data.get("authors"):
+                                    author_str = paper_data.get("authors", "").lower()
+                                    for term in query_terms.split(","):
+                                        term_clean = term.strip().lower()
+                                        if term_clean and term_clean in author_str:
+                                            matches = True
+                                            break
                                 
                                 if matches:
                                     local_matches += 1
