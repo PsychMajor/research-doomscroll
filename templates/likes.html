@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container" style="padding: 40px; text-align: center;">
+    <div class="container">
         <header class="header">
             <div class="header-top">
                 <div class="header-title">
@@ -26,37 +26,143 @@
                     {% endif %}
                 </div>
             </div>
-            
-            <nav class="nav-menu">
-                <a href="/" class="nav-item">Search</a>
-                <div class="nav-item-dropdown">
-                    <a href="/likes" class="nav-item active">Folders</a>
-                    <div class="dropdown-menu">
-                        <a href="/likes" class="dropdown-item">Likes</a>
-                    </div>
-                </div>
-                <a href="#Following" class="nav-item">Following</a>
-                <a href="#Recommended" class="nav-item">Recommended</a>
-                <a href="#Contact" class="nav-item">Contact</a>
-            </nav>
         </header>
         
-        <div style="margin-top: 80px; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <h2 style="color: #333; margin-bottom: 20px;">📂 Likes Folder</h2>
-            <p style="color: #666; font-size: 18px; line-height: 1.6;">
-                Paper search functionality has been removed.
-                <br>Once new paper sources are integrated, your likes will appear here.
-            </p>
-            
-            {% if liked_paper_ids %}
-            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
-                <p style="color: #666;">
-                    You have {{ liked_paper_ids|length }} liked paper(s) in the database.
-                    <br>These will be displayed once paper fetching is re-implemented.
-                </p>
+        <!-- Navigation Menu - Separate sticky element -->
+        <nav class="nav-menu">
+            <a href="/" class="nav-item">Search</a>
+            <div class="nav-item-dropdown">
+                <a href="/likes" class="nav-item active">Folders</a>
+                <div class="dropdown-menu">
+                    <a href="/likes" class="dropdown-item">Likes</a>
+                </div>
             </div>
-            {% endif %}
+            <a href="#Following" class="nav-item">Following</a>
+            <a href="#Recommended" class="nav-item">Recommended</a>
+            <a href="#Contact" class="nav-item">Contact</a>
+        </nav>
+        
+        {% if papers %}
+        <div class="feed">
+            {% for paper in papers %}
+            <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}">
+                <div class="card-header">
+                    <div class="paper-meta">
+                        <h2 class="paper-title">{{ paper.title | safe }}</h2>
+                        <div class="paper-info">
+                            {% if paper.authors %}
+                            <span class="authors">
+                                {% if paper.authors|length <= 4 %}
+                                    {% for author in paper.authors %}
+                                        {{ author.name }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {{ paper.authors[0].name }}, {{ paper.authors[1].name }}, ... {{ paper.authors[-2].name }}, {{ paper.authors[-1].name }}
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            <span class="separator">•</span>
+                            <span class="year">{{ paper.year }}</span>
+                            {% if paper.venue %}
+                            <span class="separator">•</span>
+                            <span class="venue">{{ paper.venue }}</span>
+                            {% endif %}
+                            {% if paper.citationCount > 0 %}
+                            <span class="separator">•</span>
+                            <span class="citations">{{ paper.citationCount }} citations</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if paper.tldr %}
+                <div class="paper-tldr">
+                    <strong>TL;DR:</strong> {{ paper.tldr | safe }}
+                </div>
+                {% endif %}
+
+                <div class="paper-abstract-container">
+                    <button class="abstract-toggle" onclick="toggleAbstract('{{ paper.paperId }}')">
+                        <span class="toggle-icon">▶</span>
+                        <span class="toggle-text">Abstract</span>
+                    </button>
+                    <div class="paper-abstract" id="abstract-{{ paper.paperId }}" style="display: none;">
+                        {% if paper.abstract %}
+                            {{ paper.abstract | safe }}
+                        {% else %}
+                            <em class="no-abstract">No abstract available</em>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    {% if paper.url %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on publisher's page</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% endif %}
+                    
+                    <div class="card-actions">
+                        <button class="like-btn active" onclick="removeLike('{{ paper.paperId }}')" title="Remove from likes">
+                            <span class="like-text">Liked</span>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
         </div>
+        
+        {% else %}
+        <div class="empty-state">
+            <h2>📂 Likes Folder</h2>
+            <p>You haven't liked any papers yet.</p>
+            <p>Go to the <a href="/">search page</a> to find and like papers!</p>
+        </div>
+        {% endif %}
     </div>
+    
+    <script>
+        function toggleAbstract(paperId) {
+            const abstract = document.getElementById(`abstract-${paperId}`);
+            const button = abstract.previousElementSibling;
+            const icon = button.querySelector('.toggle-icon');
+            
+            if (abstract.style.display === 'none') {
+                abstract.style.display = 'block';
+                icon.textContent = '▼';
+                button.classList.add('expanded');
+            } else {
+                abstract.style.display = 'none';
+                icon.textContent = '▶';
+                button.classList.remove('expanded');
+            }
+        }
+        
+        async function removeLike(paperId) {
+            if (!confirm('Remove this paper from your likes?')) {
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('paper_id', paperId);
+                
+                const response = await fetch('/paper/unlike', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // Reload the page to show updated list
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.error('Error removing like:', error);
+                alert('Failed to remove like. Please try again.');
+            }
+        }
+    </script>
 </body>
 </html>

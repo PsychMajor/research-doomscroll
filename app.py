@@ -6,6 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 import os
+import json
 import requests
 import asyncio
 from datetime import datetime
@@ -314,6 +315,84 @@ def fetch_openalex_papers(topics=None, authors=None, per_page=25, page=1, sort_b
         return []
 
 
+async def fetch_paper_by_openalex_id(openalex_id: str):
+    """
+    Fetch a single paper from OpenAlex by its ID
+    
+    Args:
+        openalex_id: OpenAlex paper ID (e.g., "W2104477830" or "https://openalex.org/W2104477830")
+    
+    Returns:
+        Paper dict or None if not found
+    """
+    try:
+        # Clean the ID - extract just the W... part if it's a URL
+        if openalex_id.startswith('http'):
+            openalex_id = openalex_id.split('/')[-1]
+        
+        # Ensure it starts with W
+        if not openalex_id.startswith('W'):
+            openalex_id = f"W{openalex_id}"
+        
+        url = f"https://api.openalex.org/works/{openalex_id}"
+        
+        params = {}
+        if OPENALEX_EMAIL:
+            params['mailto'] = OPENALEX_EMAIL
+        
+        print(f"🔍 Fetching paper from OpenAlex: {openalex_id}")
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        work = response.json()
+        
+        # Extract abstract from inverted index
+        abstract_text = ""
+        if work.get("abstract_inverted_index"):
+            inverted = work["abstract_inverted_index"]
+            words = [""] * (max(max(positions) for positions in inverted.values()) + 1)
+            for word, positions in inverted.items():
+                for pos in positions:
+                    words[pos] = word
+            abstract_text = " ".join(words)
+        
+        # Format authors
+        authors = []
+        if work.get("authorships"):
+            for authorship in work["authorships"][:10]:  # Limit to 10 authors
+                author_data = authorship.get("author", {})
+                authors.append({
+                    "name": author_data.get("display_name", "Unknown Author")
+                })
+        
+        # Generate TL;DR from abstract
+        tldr = summarize_text(abstract_text, sentences_count=2) if abstract_text else None
+        
+        # Format the paper
+        paper = {
+            "paperId": openalex_id,
+            "title": format_scientific_text(work.get("title", "Untitled")),
+            "authors": authors,
+            "abstract": format_scientific_text(abstract_text) if abstract_text else "",
+            "year": work.get("publication_year"),
+            "venue": work.get("primary_location", {}).get("source", {}).get("display_name", ""),
+            "citationCount": work.get("cited_by_count", 0),
+            "url": work.get("primary_location", {}).get("landing_page_url") or work.get("doi", ""),
+            "source": "OpenAlex",
+            "tldr": tldr
+        }
+        
+        print(f"✅ Fetched paper: {paper['title'][:50]}...")
+        return paper
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ OpenAlex API error fetching paper {openalex_id}: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Error processing OpenAlex paper {openalex_id}: {e}")
+        return None
+
+
 # ============================================================================
 # AUTHENTICATION ROUTES
 # ============================================================================
@@ -416,15 +495,37 @@ async def get_likes(request: Request):
     feedback = await database.load_feedback(user_id=user_id)
     profile = await database.load_profile(user_id=user_id)
     
-    # Note: For now, we just show that papers are liked
-    # In a full implementation, you'd store paper details in the database
-    # and fetch them here to display
+    # Fetch actual paper details from database
+    liked_paper_ids = feedback.get('liked', [])
+    papers = []
+    
+    if liked_paper_ids:
+        # First, try to get papers from database
+        papers = await database.get_papers_by_ids(liked_paper_ids)
+        papers_dict = {p['paperId']: p for p in papers}
+        
+        # For any missing papers, fetch from OpenAlex
+        missing_ids = [pid for pid in liked_paper_ids if pid not in papers_dict]
+        
+        if missing_ids:
+            print(f"📥 Fetching {len(missing_ids)} missing papers from OpenAlex...")
+            for paper_id in missing_ids:
+                paper = await fetch_paper_by_openalex_id(paper_id)
+                if paper:
+                    # Save to database for future use
+                    await database.save_paper(paper)
+                    papers.append(paper)
+                    print(f"   ✅ Fetched and saved: {paper['title'][:50]}...")
+        
+        # Sort papers by the order in liked_paper_ids (most recent first)
+        papers_dict = {p['paperId']: p for p in papers}
+        papers = [papers_dict[pid] for pid in liked_paper_ids if pid in papers_dict]
     
     return templates.TemplateResponse("likes.html", {
         "request": request,
         "user": user,
-        "papers": [],  # TODO: Fetch actual paper details from database
-        "liked_paper_ids": feedback.get('liked', []),
+        "papers": papers,
+        "liked_paper_ids": liked_paper_ids,
         "feedback": feedback,
         "profile": profile,
         "show_form": False
@@ -468,9 +569,18 @@ async def clear_profile_endpoint(request: Request):
 # ============================================================================
 
 @app.post("/paper/like")
-async def like_paper_endpoint(request: Request, paper_id: str = Form(...)):
-    """Like a paper"""
+async def like_paper_endpoint(request: Request, paper_id: str = Form(...), paper_data: str = Form(None)):
+    """Like a paper and save its metadata"""
     user = get_current_user(request)
+    
+    # Save paper metadata if provided
+    if paper_data:
+        try:
+            paper_dict = json.loads(paper_data)
+            await database.save_paper(paper_dict)
+        except Exception as e:
+            print(f"⚠️  Error parsing paper data: {e}")
+    
     await database.like_paper(paper_id, user_id=user['id'])
     return {"status": "success"}
 
@@ -482,9 +592,18 @@ async def unlike_paper_endpoint(request: Request, paper_id: str = Form(...)):
     return {"status": "success"}
 
 @app.post("/paper/dislike")
-async def dislike_paper_endpoint(request: Request, paper_id: str = Form(...)):
-    """Dislike a paper"""
+async def dislike_paper_endpoint(request: Request, paper_id: str = Form(...), paper_data: str = Form(None)):
+    """Dislike a paper and save its metadata"""
     user = get_current_user(request)
+    
+    # Save paper metadata if provided
+    if paper_data:
+        try:
+            paper_dict = json.loads(paper_data)
+            await database.save_paper(paper_dict)
+        except Exception as e:
+            print(f"⚠️  Error parsing paper data: {e}")
+    
     await database.dislike_paper(paper_id, user_id=user['id'])
     return {"status": "success"}
 

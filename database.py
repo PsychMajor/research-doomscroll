@@ -17,6 +17,7 @@ MEMORY_USERS = {}  # email -> {id, email, name, picture_url}
 MEMORY_USER_ID_COUNTER = 1
 MEMORY_PROFILES = {}  # user_id -> {topics: [], authors: []}
 MEMORY_FEEDBACK = {}  # user_id -> {paper_id: action}
+MEMORY_PAPERS = {}  # paper_id -> paper_data
 
 async def init_db():
     """Initialize database connection pool and create tables"""
@@ -56,6 +57,24 @@ async def init_db():
                 )
             ''')
             
+            # Papers table - stores paper metadata
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS papers (
+                    paper_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    authors JSONB,
+                    abstract TEXT,
+                    year INTEGER,
+                    venue TEXT,
+                    citation_count INTEGER,
+                    url TEXT,
+                    source TEXT,
+                    tldr TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            ''')
+            
             # User feedback table (likes/dislikes)
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS feedback (
@@ -82,6 +101,7 @@ async def init_db():
             # Create indexes
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_papers_paper_id ON papers(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_paper_id ON feedback(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_key ON paper_cache(cache_key, source)')
@@ -323,3 +343,130 @@ async def clear_all_feedback(action: Optional[str] = None, user_id: Optional[int
         print(f"✅ Cleared {'all' if not action else action} feedback from database")
     except Exception as e:
         print(f"⚠️  Error clearing feedback: {e}")
+
+# Paper storage functions
+async def save_paper(paper_data: Dict):
+    """Save paper metadata to database"""
+    paper_id = paper_data.get('paperId')
+    if not paper_id:
+        return
+    
+    if not pool:
+        # Use in-memory storage
+        MEMORY_PAPERS[paper_id] = paper_data
+        return
+    
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute('''
+                INSERT INTO papers (paper_id, title, authors, abstract, year, venue, citation_count, url, source, tldr)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (paper_id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    authors = EXCLUDED.authors,
+                    abstract = EXCLUDED.abstract,
+                    year = EXCLUDED.year,
+                    venue = EXCLUDED.venue,
+                    citation_count = EXCLUDED.citation_count,
+                    url = EXCLUDED.url,
+                    source = EXCLUDED.source,
+                    tldr = EXCLUDED.tldr,
+                    updated_at = NOW()
+            ''', 
+                paper_id,
+                paper_data.get('title'),
+                json.dumps(paper_data.get('authors', [])),
+                paper_data.get('abstract'),
+                paper_data.get('year'),
+                paper_data.get('venue'),
+                paper_data.get('citationCount', 0),
+                paper_data.get('url'),
+                paper_data.get('source'),
+                paper_data.get('tldr')
+            )
+    except Exception as e:
+        print(f"⚠️  Error saving paper: {e}")
+
+async def get_paper(paper_id: str) -> Optional[Dict]:
+    """Get paper metadata from database"""
+    if not pool:
+        # Use in-memory storage
+        return MEMORY_PAPERS.get(paper_id)
+    
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                'SELECT * FROM papers WHERE paper_id = $1',
+                paper_id
+            )
+            if row:
+                paper = dict(row)
+                # Convert JSONB back to list
+                if paper.get('authors'):
+                    paper['authors'] = json.loads(paper['authors']) if isinstance(paper['authors'], str) else paper['authors']
+                # Rename fields to match expected format
+                paper['paperId'] = paper['paper_id']
+                paper['citationCount'] = paper['citation_count']
+                return paper
+    except Exception as e:
+        print(f"⚠️  Error getting paper: {e}")
+    
+    return None
+
+async def get_papers_by_ids(paper_ids: List[str]) -> List[Dict]:
+    """Get multiple papers by their IDs"""
+    if not pool:
+        # Use in-memory storage
+        return [MEMORY_PAPERS[pid] for pid in paper_ids if pid in MEMORY_PAPERS]
+    
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                'SELECT * FROM papers WHERE paper_id = ANY($1) ORDER BY created_at DESC',
+                paper_ids
+            )
+            papers = []
+            for row in rows:
+                paper = dict(row)
+                # Convert JSONB back to list
+                if paper.get('authors'):
+                    paper['authors'] = json.loads(paper['authors']) if isinstance(paper['authors'], str) else paper['authors']
+                # Rename fields to match expected format
+                paper['paperId'] = paper['paper_id']
+                paper['citationCount'] = paper['citation_count']
+                papers.append(paper)
+            return papers
+    except Exception as e:
+        print(f"⚠️  Error getting papers: {e}")
+    
+    return []
+
+# Convenience methods for like/dislike functionality
+async def like_paper(paper_id: str, user_id: Optional[int] = None):
+    """Mark a paper as liked"""
+    await save_feedback(paper_id, 'liked', user_id)
+
+async def unlike_paper(paper_id: str, user_id: Optional[int] = None):
+    """Remove like from a paper"""
+    await delete_feedback(paper_id, user_id)
+
+async def dislike_paper(paper_id: str, user_id: Optional[int] = None):
+    """Mark a paper as disliked"""
+    await save_feedback(paper_id, 'disliked', user_id)
+
+async def undislike_paper(paper_id: str, user_id: Optional[int] = None):
+    """Remove dislike from a paper"""
+    await delete_feedback(paper_id, user_id)
+
+async def clear_feedback(user_id: Optional[int] = None):
+    """Clear all feedback for a user"""
+    await clear_all_feedback(action=None, user_id=user_id)
+
+async def clear_liked(user_id: Optional[int] = None):
+    """Clear all liked papers for a user"""
+    await clear_all_feedback(action='liked', user_id=user_id)
+
+async def clear_disliked(user_id: Optional[int] = None):
+    """Clear all disliked papers for a user"""
+    await clear_all_feedback(action='disliked', user_id=user_id)
+

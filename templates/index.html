@@ -397,6 +397,12 @@
                         const formData = new FormData();
                         formData.append('paper_id', paperId);
                         
+                        // Get paper data from card
+                        const paperJson = card.getAttribute('data-paper-json');
+                        if (paperJson) {
+                            formData.append('paper_data', paperJson);
+                        }
+                        
                         const response = await fetch('/paper/like', {
                             method: 'POST',
                             body: formData
@@ -450,6 +456,12 @@
                         // Dislike the paper
                         const formData = new FormData();
                         formData.append('paper_id', paperId);
+                        
+                        // Get paper data from card
+                        const paperJson = card.getAttribute('data-paper-json');
+                        if (paperJson) {
+                            formData.append('paper_data', paperJson);
+                        }
                         
                         const response = await fetch('/paper/dislike', {
                             method: 'POST',
@@ -736,7 +748,7 @@
 
         <div class="feed" id="feedContainer">
             {% for paper in papers %}
-            <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}">
+            <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}" data-paper-json='{{ paper | tojson | safe }}'>
                 <div class="card-header">
                     <div class="paper-meta">
                         <h2 class="paper-title">{{ paper.title | safe }}</h2>
@@ -763,10 +775,6 @@
                             {% if paper.citationCount > 0 %}
                             <span class="separator">•</span>
                             <span class="citations">{{ paper.citationCount }} citations</span>
-                            {% endif %}
-                            {% if paper.source %}
-                            <span class="separator">•</span>
-                            <span class="source-badge">{{ paper.source }}</span>
                             {% endif %}
                         </div>
                     </div>
@@ -801,7 +809,7 @@
                     </a>
                     {% elif paper.source == 'OpenAlex' %}
                     <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
-                        <span>Read on {% if paper.venue %}{{ paper.venue }}{% else %}Publisher{% endif %}</span>
+                        <span>Read on publisher's page</span>
                         <span class="link-icon">↗</span>
                     </a>
                     {% else %}
