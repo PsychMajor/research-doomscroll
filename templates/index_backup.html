@@ -31,7 +31,7 @@
                     <p class="subtitle">Infinite scroll through research papers</p>
                 </div>
                 <div class="header-actions">
-                    {% if user and user.id != 'anonymous' %}
+                    {% if user and user.id %}
                         <div class="user-info">
                             <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
                             <span class="user-name">Welcome {{ user.name.split()[0] if user.name else user.email.split('@')[0] }}</span>
@@ -42,25 +42,45 @@
                     {% endif %}
                 </div>
             </div>
-        </header>
-        
-        <!-- Navigation Menu - Separate sticky element -->
-        <nav class="nav-menu">
-            <a href="#" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
-            <div class="nav-item-dropdown">
-                <a href="/likes" class="nav-item">Folders</a>
-                <div class="dropdown-menu">
-                    <a href="/likes" class="dropdown-item">Likes</a>
+            
+            <!-- Navigation Menu -->
+            <nav class="nav-menu">
+                <a href="/" class="nav-item active">Search</a>
+                <div class="nav-item-dropdown">
+                    <a href="/likes" class="nav-item">Folders</a>
+                    <div class="dropdown-menu">
+                        <a href="/likes" class="dropdown-item">Likes</a>
+                    </div>
                 </div>
+                <a href="#Following" class="nav-item">Following</a>
+                <a href="#Recommended" class="nav-item">Recommended</a>
+                <a href="#Contact" class="nav-item">Contact</a>
+            </nav>
+            
+            {% if topics or authors %}
+            <div class="divider-with-toggle" onclick="toggleSearchForm()">
+                <div class="divider-line"></div>
+                <button class="divider-arrow">
+                    <span class="toggle-icon" id="toggleIcon">▲</span>
+                </button>
+                <div class="divider-line"></div>
             </div>
-            <a href="#Following" class="nav-item">Following</a>
-            <a href="#Recommended" class="nav-item">Recommended</a>
-            <a href="#Contact" class="nav-item">Contact</a>
-        </nav>
+            {% endif %}
             
             {% if show_form %}
             <div class="search-form-wrapper" id="searchFormWrapper">
                 <form class="search-form" method="POST" action="/profile/save" onsubmit="showFeedLoader()">
+                <div class="profile-header">
+                    <div class="profile-info">
+                        <div>
+                            <h3>Your Research Profile</h3>
+                            <p class="profile-subtitle">Save your interests for a curated feed</p>
+                        </div>
+                    </div>
+                    {% if profile.topics %}
+                    <span class="profile-status">Profile Saved</span>
+                    {% endif %}
+                </div>
 
                 <div class="form-group">
                     <label for="topics">
@@ -77,31 +97,8 @@
                     <span class="help-text">Enter research topics or keywords separated by commas</span>
                 </div>
                 
-                <div class="form-group">
-                    <label for="authors">
-                        Authors
-                    </label>
-                    <input 
-                        type="text" 
-                        id="authors" 
-                        name="authors" 
-                        placeholder="e.g., Samay R. Shah, Michael J Iadarola"
-                        value="{{ authors }}"
-                        class="form-input"
-                    >
-                    <span class="help-text">Enter author names separated by commas (optional)</span>
-                </div>
-                
-                <div class="form-group">
-                    <label for="sort_by">
-                        Sort By
-                    </label>
-                    <select id="sort_by" name="sort_by" class="form-input">
-                        <option value="relevance" {% if sort_by == 'relevance' or not sort_by %}selected{% endif %}>Relevance (Most Cited)</option>
-                        <option value="recency" {% if sort_by == 'recency' %}selected{% endif %}>Recency (Newest First)</option>
-                    </select>
-                    <span class="help-text">Choose how to order the results</span>
-                </div>
+                <!-- Hidden authors field (not displayed to user) -->
+                <input type="hidden" id="authors" name="authors" value="{{ authors }}">
                 
                 <div class="form-actions">
                     <button type="submit" class="search-btn">
@@ -115,6 +112,30 @@
                 </div>
             </form>
             </div>
+            
+            {% if topics %}
+            <div class="active-filters-wrapper">
+                <div class="active-filters-content centered" id="filtersContent">
+                    <span class="filter-label">Current feed:</span>
+                    <span class="filter-tag">{{ topics }}</span>
+                    {% if feedback %}
+                    <span class="feedback-stats" id="feedbackStats">
+                        <span id="likedCount">{{ feedback.liked|length }}</span>&nbsp;liked · <span id="dislikedCount">{{ feedback.disliked|length }}</span>&nbsp;disliked
+                    </span>
+                    {% endif %}
+                    {% if feedback.liked|length > 0 %}
+                    <a href="/?use_recommendations=true&topics={{ topics }}" class="recommendations-btn">
+                        Get Recommendations
+                    </a>
+                    {% endif %}
+                    {% if feedback.liked|length > 0 or feedback.disliked|length > 0 %}
+                    <button onclick="showClearModal()" class="clear-feedback-btn" title="Clear feedback">
+                        Clear
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             {% endif %}
         </header>
 
@@ -285,51 +306,20 @@
                 if (feedLoader) {
                     feedLoader.classList.remove('hidden');
                 }
-                
-                // Hide search form after submission
+            }
+
+            function toggleSearchForm() {
                 const wrapper = document.getElementById('searchFormWrapper');
-                if (wrapper) {
-                    setTimeout(() => {
-                        wrapper.classList.add('hidden');
-                    }, 300);
+                const icon = document.getElementById('toggleIcon');
+                
+                if (wrapper.classList.contains('collapsed')) {
+                    wrapper.classList.remove('collapsed');
+                    icon.textContent = '▲';
+                } else {
+                    wrapper.classList.add('collapsed');
+                    icon.textContent = '▼';
                 }
             }
-            
-            function showSearchForm() {
-                const wrapper = document.getElementById('searchFormWrapper');
-                if (wrapper) {
-                    wrapper.classList.remove('hidden');
-                    
-                    // Get the nav menu height to offset the scroll
-                    const navMenu = document.querySelector('.nav-menu');
-                    const navHeight = navMenu ? navMenu.offsetHeight : 0;
-                    
-                    // Scroll to the form with offset for sticky nav
-                    setTimeout(() => {
-                        const wrapperTop = wrapper.getBoundingClientRect().top + window.pageYOffset;
-                        const offsetPosition = wrapperTop - navHeight;
-                        
-                        window.scrollTo({
-                            top: offsetPosition,
-                            behavior: 'smooth'
-                        });
-                    }, 100); // Small delay to ensure the wrapper is visible
-                }
-            }
-            
-            // Hide form on page load if there are papers
-            document.addEventListener('DOMContentLoaded', function() {
-                const wrapper = document.getElementById('searchFormWrapper');
-                // Check if there are papers in the feed
-                const papers = {{ papers | tojson | safe }};
-                
-                if (papers && papers.length > 0 && wrapper) {
-                    // Add a small delay to ensure smooth transition
-                    setTimeout(() => {
-                        wrapper.classList.add('hidden');
-                    }, 100);
-                }
-            });
 
         function toggleFeed() {
             const feedContainer = document.getElementById('feedContainer');
@@ -739,18 +729,15 @@
             <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}">
                 <div class="card-header">
                     <div class="paper-meta">
-                        <h2 class="paper-title">{{ paper.title | safe }}</h2>
+                        <h2 class="paper-title">{{ paper.title }}</h2>
                         <div class="paper-info">
                             {% if paper.authors %}
                             <span class="authors">
-                                {% if paper.authors|length <= 4 %}
-                                    {# Show all authors if 4 or fewer #}
-                                    {% for author in paper.authors %}
-                                        {{ author.name }}{% if not loop.last %}, {% endif %}
-                                    {% endfor %}
-                                {% else %}
-                                    {# Show first 2 and last 2 if more than 4 #}
-                                    {{ paper.authors[0].name }}, {{ paper.authors[1].name }}, ... {{ paper.authors[-2].name }}, {{ paper.authors[-1].name }}
+                                {% for author in paper.authors[:3] %}
+                                    {{ author.name }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                {% if paper.authors|length > 3 %}
+                                    <span class="more-authors">+{{ paper.authors|length - 3 }} more</span>
                                 {% endif %}
                             </span>
                             {% endif %}
@@ -774,7 +761,7 @@
 
                 {% if paper.tldr %}
                 <div class="paper-tldr">
-                    <strong>TL;DR:</strong> {{ paper.tldr | safe }}
+                    <strong>TL;DR:</strong> {{ paper.tldr }}
                 </div>
                 {% endif %}
 
@@ -785,7 +772,7 @@
                     </button>
                     <div class="paper-abstract" id="abstract-{{ paper.paperId }}" style="display: none;">
                         {% if paper.abstract %}
-                            {{ paper.abstract | safe }}
+                            {{ paper.abstract }}
                         {% else %}
                             <em class="no-abstract">No abstract available</em>
                         {% endif %}
@@ -797,11 +784,6 @@
                     {% if paper.source == 'bioRxiv' %}
                     <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
                         <span>Read on bioRxiv</span>
-                        <span class="link-icon">↗</span>
-                    </a>
-                    {% elif paper.source == 'OpenAlex' %}
-                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
-                        <span>Read on {% if paper.venue %}{{ paper.venue }}{% else %}Publisher{% endif %}</span>
                         <span class="link-icon">↗</span>
                     </a>
                     {% else %}
