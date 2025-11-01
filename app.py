@@ -424,21 +424,20 @@ async def auth_callback(request: Request):
         user_info = token.get('userinfo')
         
         if user_info:
-            # Store user in session
+            # Create or update user in database
+            db_user_id = await database.create_or_update_user(
+                email=user_info['email'],
+                name=user_info.get('name', ''),
+                picture_url=user_info.get('picture', '')
+            )
+            
+            # Store user in session with database user_id
             request.session['user'] = {
-                'id': user_info['sub'],
+                'id': db_user_id if db_user_id else user_info['sub'],  # Fallback to Google ID if DB fails
                 'email': user_info['email'],
                 'name': user_info.get('name', ''),
                 'picture': user_info.get('picture', '')
             }
-            
-            # Create or update user in database
-            await database.create_or_update_user(
-                user_id=user_info['sub'],
-                email=user_info['email'],
-                name=user_info.get('name', ''),
-                picture=user_info.get('picture', '')
-            )
     except Exception as e:
         print(f"OAuth error: {e}")
     
