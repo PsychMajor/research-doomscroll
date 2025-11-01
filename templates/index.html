@@ -1388,6 +1388,10 @@
                             card.style.transform = 'translateX(0)';
                             updateFeedbackStats();
                             savePageState(); // Save state after feedback change
+                            
+                            // Clear /likes cache so it refreshes with updated list
+                            spa.viewCache.delete('/likes');
+                            console.log('🗑️  Cleared /likes cache after unliking');
                         }
                     } else {
                         // Like the paper
@@ -1419,6 +1423,10 @@
                             card.style.transform = 'translateX(0)';
                             updateFeedbackStats();
                             savePageState(); // Save state after feedback change
+                            
+                            // Clear /likes cache so it refreshes with updated list
+                            spa.viewCache.delete('/likes');
+                            console.log('🗑️  Cleared /likes cache after liking');
                         }
                     }
                 } catch (error) {
