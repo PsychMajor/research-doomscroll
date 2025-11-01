@@ -48,9 +48,9 @@
         <nav class="nav-menu">
             <a href="javascript:void(0)" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
-                <a href="/likes" class="nav-item">Folders</a>
+                <a href="/likes" class="nav-item" onclick="savePageState()">Folders</a>
                 <div class="dropdown-menu">
-                    <a href="/likes" class="dropdown-item">Likes</a>
+                    <a href="/likes" class="dropdown-item" onclick="savePageState()">Likes</a>
                 </div>
             </div>
             <a href="#Following" class="nav-item">Following</a>
@@ -372,11 +372,21 @@
 
             console.log('✨ RESTORE COMPLETE:', state.papers.length, 'papers restored');
             
-            // Restore scroll position after a brief delay
+            // Restore scroll position after DOM is fully rendered
+            // Try immediately, then retry after animations complete
+            const targetScrollPos = state.scrollPosition;
+            
+            // Immediate attempt
             setTimeout(() => {
-                window.scrollTo(0, state.scrollPosition);
-                console.log('📍 Scroll position restored:', state.scrollPosition);
+                window.scrollTo(0, targetScrollPos);
+                console.log('📍 Scroll position restored (1st attempt):', targetScrollPos);
             }, 100);
+            
+            // Retry after page fully renders (accounts for images, etc.)
+            setTimeout(() => {
+                window.scrollTo(0, targetScrollPos);
+                console.log('📍 Scroll position restored (2nd attempt):', targetScrollPos);
+            }, 500);
 
             return true;
         }
