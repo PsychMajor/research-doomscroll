@@ -275,42 +275,57 @@
                 const cardNumber = index + 1;
                 const isExpanded = state.expandedAbstracts.includes(paper.paperId);
                 
+                // Format authors properly
+                let authorsHtml = '';
+                if (paper.authors && Array.isArray(paper.authors)) {
+                    if (paper.authors.length <= 4) {
+                        authorsHtml = paper.authors.map(a => a.name || a).join(', ');
+                    } else {
+                        const first = paper.authors[0].name || paper.authors[0];
+                        const second = paper.authors[1].name || paper.authors[1];
+                        const secondLast = paper.authors[paper.authors.length - 2].name || paper.authors[paper.authors.length - 2];
+                        const last = paper.authors[paper.authors.length - 1].name || paper.authors[paper.authors.length - 1];
+                        authorsHtml = `${first}, ${second}, ... ${secondLast}, ${last}`;
+                    }
+                } else if (typeof paper.authors === 'string') {
+                    authorsHtml = paper.authors;
+                }
+                
                 html += `
                 <article class="paper-card" data-card-number="${cardNumber}" data-paper-id="${paper.paperId}" data-paper-json='${JSON.stringify(paper).replace(/'/g, "&apos;")}'>
                     <div class="card-header">
-                        <h3 class="paper-title">${paper.title}</h3>
-                        <div class="paper-metadata">
-                            <span class="paper-authors">${paper.authors}</span>
-                            ${paper.year ? `<span class="paper-date">${paper.year}</span>` : ''}
-                            ${paper.venue ? `<span class="paper-venue">${paper.venue}</span>` : ''}
-                            ${paper.citationCount !== undefined ? `<span class="paper-citations">📊 ${paper.citationCount} citations</span>` : ''}
+                        <div class="paper-meta">
+                            <h2 class="paper-title">${paper.title}</h2>
+                            <div class="paper-info">
+                                ${authorsHtml ? `<span class="authors">${authorsHtml}</span>` : ''}
+                                <span class="separator">•</span>
+                                <span class="year">${paper.year || ''}</span>
+                                ${paper.venue ? `<span class="separator">•</span><span class="venue">${paper.venue}</span>` : ''}
+                                ${paper.citationCount > 0 ? `<span class="separator">•</span><span class="citations">${paper.citationCount} citations</span>` : ''}
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="card-content">
-                        ${paper.tldr ? `
-                        <div class="paper-tldr">
-                            <strong>TL;DR:</strong> ${paper.tldr}
+                    ${paper.tldr ? `
+                    <div class="paper-tldr">
+                        <strong>TL;DR:</strong> ${paper.tldr}
+                    </div>
+                    ` : ''}
+                    
+                    <div class="paper-abstract-container">
+                        <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
+                            <span class="toggle-icon">${isExpanded ? '▼' : '▶'}</span>
+                            <span class="toggle-text">Abstract</span>
+                        </button>
+                        <div class="paper-abstract" id="abstract-${paper.paperId}" style="display: ${isExpanded ? 'block' : 'none'};">
+                            ${paper.abstract ? paper.abstract : '<em class="no-abstract">No abstract available</em>'}
                         </div>
-                        ` : ''}
-                        
-                        ${paper.abstract ? `
-                        <div class="abstract-section">
-                            <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
-                                <span class="toggle-icon">${isExpanded ? '▼' : '▶'}</span>
-                                <span class="toggle-text">Abstract</span>
-                            </button>
-                            <div id="abstract-${paper.paperId}" class="abstract-content" style="display: ${isExpanded ? 'block' : 'none'};">
-                                ${paper.abstract}
-                            </div>
-                        </div>
-                        ` : ''}
                     </div>
 
                     <div class="card-footer">
                         ${paper.url ? `
                         <a href="${paper.url}" class="paper-link" target="_blank" rel="noopener noreferrer">
-                            <span>Read on publisher's page</span>
+                            <span>${paper.source === 'bioRxiv' ? 'Read on bioRxiv' : 'Read on publisher\'s page'}</span>
                             <span class="link-icon">↗</span>
                         </a>
                         ` : ''}

@@ -1,5 +1,13 @@
 # Cache Testing Guide
 
+## ⚠️ IMPORTANT: Where to Find Logs
+
+**The caching logs appear in your BROWSER CONSOLE, not the terminal!**
+
+- **Browser Console**: Press `F12` (or `Cmd+Option+I` on Mac) to open Developer Tools
+- **Terminal**: Only shows server-side logs (API calls, database operations)
+- **Cache Logs**: All the `💾 CACHE SAVED`, `📂 CACHE FOUND`, etc. appear in the **browser console**
+
 ## What Was Added
 
 I've implemented a comprehensive localStorage caching system that preserves your search results, scroll position, and interaction state when navigating between pages.
@@ -11,31 +19,42 @@ I've implemented a comprehensive localStorage caching system that preserves your
    .venv/bin/python -m uvicorn app:app --reload
    ```
 
-2. **Open Browser Console** (F12 or Cmd+Option+I)
+2. **Open Browser Console** (F12 or Cmd+Option+I) ← **THIS IS WHERE YOU'LL SEE THE CACHE LOGS**
    - Keep console open to see all cache logging messages
+   - Look for colorful emoji icons like 💾 📂 🔍 ✨ 🗑️
 
 3. **Test the Cache**:
 
-### Test 1: Basic Caching
-1. Do a search (e.g., author: "brian kobilka")
+### Test 1: Basic Caching & Restoration
+1. Do a search (e.g., author: "brian kobilka", sort by: "Recency")
 2. Scroll down through several papers
-3. Like a few papers
-4. Expand some abstracts
-5. **Watch console for**: `💾 CACHE SAVED` messages (appears every 30 seconds and when you interact)
-6. Click on "Likes" in the navigation
-7. Click "Search" to return
+3. Like a few papers (this triggers cache save)
+4. Expand some abstracts (this also triggers cache save)
+5. **Watch console for**: `💾 CACHE SAVED` messages
+6. Click on "Likes" in the navigation (navigate away)
+7. Click "Search" in the navigation (return to search page)
 8. **Watch console for**: 
    - `🚀 PAGE LOAD - Checking for cache...`
    - `📂 CACHE FOUND` (shows cached data details)
    - `🔍 SEARCH COMPARISON` (shows if search params match)
-   - `🔄 RESTORING CACHE` (shows restoration in progress)
+   - `� RESTORE DECISION` (shows cache vs server comparison)
+   - `�🔄 RESTORING CACHE` (shows restoration in progress)
    - `✨ RESTORE COMPLETE` (shows how many papers restored)
    - `📍 Scroll position restored` (shows scroll position)
+9. **Result**: You should see ALL your papers (not just first 25), at the exact scroll position, with likes and expanded abstracts preserved! ✨
 
-### Test 2: New Search Clears Cache
-1. With papers loaded, do a NEW search (different author/topics)
-2. **Watch console for**: `🗑️ CACHE CLEARED - New search initiated`
-3. New results should appear (no restoration)
+### Test 2: Cache Persists Through Same Search
+1. With papers loaded, click the "Search" nav button
+2. Click "Generate Feed" button WITHOUT changing topics/authors
+3. **Watch console for**: `📌 Same search parameters, keeping cache`
+4. **Result**: Papers should restore from cache instantly (no API call)
+
+### Test 3: New Search Clears Cache
+1. With papers loaded, click the "Search" nav button  
+2. Change the author or topics field
+3. Click "Generate Feed"
+4. **Watch console for**: `🗑️ CACHE CLEARED - New search initiated`
+5. **Result**: New results should appear (fresh API call)
 
 ### Test 3: Cache Auto-Save
 1. Load papers and interact (like, scroll, expand abstracts)
@@ -131,6 +150,19 @@ The cache should:
 - ✅ Save when toggling abstracts
 - ✅ Save before leaving page
 - ✅ Restore when returning from another page (same search)
-- ✅ Clear when starting a new search
+- ✅ Restore when clicking "Generate Feed" with same parameters
+- ✅ Clear ONLY when search parameters actually change (topics or authors)
 - ✅ Expire after 24 hours
-- ✅ Handle search parameter comparison correctly
+- ✅ Prefer cache over fresh server data (keeps all loaded papers, not just first 25)
+
+## Key Behavior Changes
+
+**Before**: Cache cleared every time you clicked "Generate Feed"
+**After**: Cache only clears when search parameters (topics/authors) actually change
+
+This means:
+- Navigate to /likes and back → **Restores full cache** ✅
+- Click "Generate Feed" with same params → **Restores cache** ✅  
+- Click "Generate Feed" with new params → **Clears cache, fresh search** ✅
+- Load more papers → **Cache grows** ✅
+- Return from another page → **See all papers you loaded** ✅
