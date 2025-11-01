@@ -310,17 +310,21 @@
             reinitializeView() {
                 console.log('🔧 Reinitializing view components...');
                 
-                // Reinitialize observers if they exist
-                if (typeof initializeObservers === 'function') {
-                    initializeObservers();
+                // Update feedback state from current sets
+                if (typeof likedPapers !== 'undefined' && typeof dislikedPapers !== 'undefined') {
+                    console.log(`📊 Current feedback state: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
                 }
                 
-                // Restore feedback states
-                if (typeof markFeedbackStates === 'function') {
-                    markFeedbackStates();
+                // Reinitialize view (this will set up everything)
+                if (typeof initializeView === 'function') {
+                    setTimeout(() => {
+                        initializeView();
+                    }, 100); // Small delay to ensure DOM is ready
+                } else {
+                    console.warn('⚠️  initializeView function not found');
                 }
                 
-                console.log('✅ View reinitialized');
+                console.log('✅ View reinitialization queued');
             }
             
             handlePopState(e) {
@@ -765,172 +769,179 @@
         const originalLikePaper = likePaper;
         const originalDislikePaper = dislikePaper;
 
-            // Page load initialization
-            window.addEventListener('DOMContentLoaded', function() {
-                console.log('🚀 PAGE LOAD - Checking for cache...');
-                console.log('📋 Current search params:', { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS });
+        // ============= VIEW INITIALIZATION FUNCTION (for SPA) =============
+        function initializeView() {
+            console.log('� Initializing view...');
+            
+            // Check if we're on the search page (has search form)
+            const searchForm = document.querySelector('.search-form');
+            if (!searchForm) {
+                console.log('⏭️  Not on search page, skipping initialization');
+                return;
+            }
+            
+            // Set up Intersection Observer
+            setupObserver();
+            
+            // Initialize pagination from server-rendered papers (if any)
+            const feed = document.querySelector('.feed');
+            if (feed) {
+                const paperCards = document.querySelectorAll('.paper-card');
+                console.log(`📊 Found ${paperCards.length} paper cards in DOM`);
                 
-                // Set up Intersection Observer FIRST (before any cache restoration)
-                // This ensures it's available when restorePageState() needs it
-                const observerOptions = {
-                    root: null, // viewport
-                    rootMargin: '0px',
-                    threshold: 0.75 // 75% visible (more lenient for mobile)
-                };
+                // If we have server papers and haven't initialized yet
+                if (typeof window._serverPapers !== 'undefined' && window._serverPapers && allPapers.length === 0) {
+                    allPapers = window._serverPapers;
+                    renderedCount = paperCards.length;
+                    console.log(`📊 PAGINATION INITIALIZED: ${allPapers.length} papers fetched, ${renderedCount} rendered`);
+                }
+                
+                // If we already have papers, just update rendered count
+                if (allPapers.length > 0 && renderedCount === 0) {
+                    renderedCount = paperCards.length;
+                    console.log(`📊 Updated renderedCount: ${renderedCount} of ${allPapers.length}`);
+                }
+            }
+            
+            // Try to restore from cache first
+            const cachedState = loadPageState();
+            restoredFromCache = false;
+            
+            if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
+                const currentPaperCount = document.querySelectorAll('.paper-card').length;
+                
+                console.log('🔍 RESTORE DECISION:', {
+                    currentPaperCount: currentPaperCount,
+                    cachedPaperCount: cachedState.papers.length,
+                    decision: cachedState.papers.length > currentPaperCount ? 'RESTORE CACHE' : 'USE CURRENT'
+                });
+                
+                if (cachedState.papers.length > currentPaperCount) {
+                    restoredFromCache = restorePageState(cachedState);
+                    if (restoredFromCache) {
+                        allPapers = cachedState.allPapers || cachedState.papers;
+                        renderedCount = cachedState.renderedCount || cachedState.papers.length;
+                        console.log(`📊 PAGINATION RESTORED FROM CACHE: ${allPapers.length} total, ${renderedCount} rendered`);
+                    }
+                }
+            }
+            
+            // Mark feedback states
+            markFeedbackStates();
+            
+            // Hide page loader
+            const pageLoader = document.getElementById('pageLoader');
+            if (pageLoader && pageLoader.style.display !== 'none') {
+                setTimeout(() => {
+                    pageLoader.classList.add('hidden');
+                    setTimeout(() => {
+                        pageLoader.style.display = 'none';
+                    }, 300);
+                }, 200);
+            }
+            
+            console.log('✅ View initialized');
+        }
+        
+        // ============= OBSERVER SETUP FUNCTION =============
+        function setupObserver() {
+            console.log('🔭 Setting up Intersection Observer...');
+            
+            // Disconnect existing observer if any
+            if (observer) {
+                observer.disconnect();
+                console.log('� Disconnected old observer');
+            }
+            
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.75
+            };
 
-                observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting && entry.intersectionRatio >= 0.75) {
-                            const card = entry.target;
-                            const cardNumber = card.dataset.cardNumber;
-                            const paperId = card.dataset.paperId;
+            observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && entry.intersectionRatio >= 0.75) {
+                        const card = entry.target;
+                        const cardNumber = card.dataset.cardNumber;
+                        const paperId = card.dataset.paperId;
+                        
+                        if (!loggedCards.has(paperId)) {
+                            loggedCards.add(paperId);
+                            logCardVisible(cardNumber, paperId);
                             
-                            // Use paper ID as unique identifier to avoid conflicts with restarted numbering
-                            if (!loggedCards.has(paperId)) {
-                                loggedCards.add(paperId);
-                                logCardVisible(cardNumber, paperId);
+                            const allCards = document.querySelectorAll('.paper-card');
+                            const currentIndex = Array.from(allCards).indexOf(card);
+                            
+                            console.log(`� Card visible: #${cardNumber} (index ${currentIndex} of ${allCards.length} total cards)`);
+                            console.log(`📊 Pagination state: ${renderedCount} rendered of ${allPapers.length} total papers`);
+                            
+                            if (currentIndex === allCards.length - 2) {
+                                console.log(`🔔 SECOND-TO-LAST CARD DETECTED: Card #${cardNumber}`);
+                                logSecondToLastCard(cardNumber, paperId, allCards.length);
                                 
-                                // Check if this is the second-to-last card
-                                const allCards = document.querySelectorAll('.paper-card');
-                                const currentIndex = Array.from(allCards).indexOf(card);
+                                const remainingPapers = allPapers.length - renderedCount;
                                 
-                                console.log(`📍 Card visible: #${cardNumber} (index ${currentIndex} of ${allCards.length} total cards)`);
-                                console.log(`📊 Pagination state: ${renderedCount} rendered of ${allPapers.length} total papers`);
-                                
-                                if (currentIndex === allCards.length - 2) {
-                                    console.log(`🔔 SECOND-TO-LAST CARD DETECTED: Card #${cardNumber} (${currentIndex + 1} of ${allCards.length})`);
-                                    logSecondToLastCard(cardNumber, paperId, allCards.length);
-                                    
-                                    // Calculate remaining unrendered papers
-                                    const remainingPapers = allPapers.length - renderedCount;
-                                    
-                                    console.log(`📊 DETAILED STATE:`, {
-                                        allPapersLength: allPapers.length,
-                                        renderedCount: renderedCount,
-                                        remainingPapers: remainingPapers,
-                                        allCardsLength: allCards.length,
-                                        currentIndex: currentIndex
-                                    });
-                                    
-                                    // Automatically render next batch from cached papers
-                                    if (remainingPapers > 0) {
-                                        console.log(`🔄 Auto-rendering next batch... (${allPapers.length} total, ${renderedCount} currently rendered, ${remainingPapers} remaining)`);
-                                        renderNextBatch();
-                                    } else {
-                                        console.log(`✅ All cached papers rendered (${renderedCount}/${allPapers.length})`);
-                                        console.log(`🔍 Checking if we need to fetch more papers...`);
-                                        console.log(`   allPapers.length = ${allPapers.length}`);
-                                        console.log(`   threshold = 40`);
-                                        console.log(`   Should fetch? ${allPapers.length < 40 ? 'YES' : 'NO - count is >= 40'}`);
-                                        
-                                        // ALWAYS try to fetch more when we've rendered all papers
-                                        console.log(`🌐 Attempting to fetch more unique papers (current total: ${allPapers.length})...`);
-                                        fetchMoreUniquePapers();
-                                    }
+                                if (remainingPapers > 0) {
+                                    console.log(`🔄 Auto-rendering next batch...`);
+                                    renderNextBatch();
+                                } else {
+                                    console.log(`🌐 Fetching more unique papers...`);
+                                    fetchMoreUniquePapers();
                                 }
                             }
                         }
-                    });
-                }, observerOptions);
+                    }
+                });
+            }, observerOptions);
+            
+            // Observe all paper cards
+            const cards = document.querySelectorAll('.paper-card');
+            cards.forEach(card => observer.observe(card));
+            console.log(`✅ Observer watching ${cards.length} cards`);
+        }
+        
+        // ============= FEEDBACK STATE MARKING =============
+        function markFeedbackStates() {
+            console.log(`🎯 Marking feedback states: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
+            
+            likedPapers.forEach(paperId => {
+                const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                if (card) {
+                    const btn = card.querySelector('.like-btn');
+                    if (btn) {
+                        btn.classList.add('active');
+                        const textEl = btn.querySelector('.like-text');
+                        if (textEl) textEl.textContent = 'Liked!';
+                    }
+                }
+            });
 
-                // Initialize pagination from server-rendered papers
+            dislikedPapers.forEach(paperId => {
+                const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                if (card) {
+                    const btn = card.querySelector('.dislike-btn');
+                    if (btn) {
+                        btn.classList.add('active');
+                        card.style.opacity = '0.3';
+                        card.style.transform = 'translateX(-20px)';
+                    }
+                }
+            });
+        }
+
+            // Page load initialization
+            window.addEventListener('DOMContentLoaded', function() {
+                console.log('🚀 PAGE LOAD - DOMContentLoaded');
+                console.log('📋 Current search params:', { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS });
+                
+                // Store server papers globally for initializeView
                 const serverPapers = {{ papers | tojson | safe }};
+                window._serverPapers = serverPapers;
                 console.log('🔧 SERVER PAPERS:', serverPapers ? serverPapers.length : 0, 'papers received');
                 
-                if (serverPapers && serverPapers.length > 0) {
-                    allPapers = serverPapers;
-                    // Count how many are currently rendered in the DOM
-                    renderedCount = document.querySelectorAll('.paper-card').length;
-                    console.log(`📊 PAGINATION INITIALIZED: ${allPapers.length} papers fetched, ${renderedCount} rendered, ${PAPERS_PER_PAGE} per page`);
-                    console.log(`📊 First paper title:`, allPapers[0].title);
-                    console.log(`📊 Can load more?`, renderedCount < allPapers.length);
-                }
-                
-                // Try to restore from cache first
-                const cachedState = loadPageState();
-                restoredFromCache = false;  // Reset the global variable
-                
-                if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
-                    const serverPaperCount = serverPapers ? serverPapers.length : 0;
-                    
-                    console.log('🔍 RESTORE DECISION:', {
-                        serverPaperCount: serverPaperCount,
-                        cachedPaperCount: cachedState.papers.length,
-                        decision: cachedState.papers.length >= serverPaperCount ? 'RESTORE CACHE' : 'USE SERVER DATA'
-                    });
-                    
-                    // Prefer cache if it has same or more papers (means we loaded more)
-                    // This way returning from /likes will restore your full feed
-                    if (cachedState.papers.length >= serverPaperCount) {
-                        restoredFromCache = restorePageState(cachedState);
-                        if (restoredFromCache) {
-                            // Restore pagination state from cache
-                            allPapers = cachedState.allPapers || cachedState.papers;
-                            renderedCount = cachedState.renderedCount || cachedState.papers.length;
-                            console.log(`📊 PAGINATION RESTORED FROM CACHE: ${allPapers.length} total, ${renderedCount} rendered`);
-                            
-                            // CRITICAL: Verify restoration is complete
-                            const actualCardsOnPage = document.querySelectorAll('.paper-card').length;
-                            console.log(`🔍 VERIFICATION: Expected ${cachedState.papers.length} cards, found ${actualCardsOnPage} on page`);
-                            
-                            if (actualCardsOnPage !== cachedState.papers.length) {
-                                console.error(`❌ MISMATCH: Card count doesn't match cache!`);
-                            }
-                        }
-                    } else {
-                        console.log('📄 Server has more papers, using fresh server data');
-                    }
-                } else {
-                    console.log('📄 No valid cache to restore, using server data');
-                }
-
-                // Hide initial page loader (only if not already hidden by cache restore)
-                const pageLoader = document.getElementById('pageLoader');
-                if (pageLoader && pageLoader.style.display !== 'none') {
-                    setTimeout(() => {
-                        pageLoader.classList.add('hidden');
-                        setTimeout(() => {
-                            pageLoader.style.display = 'none';
-                        }, 300);
-                    }, 500);
-                }
-
-                // Don't auto-collapse - keep form visible so users can always access it
-
-                // Mark already rated papers (if not restored from cache)
-                if (!restoredFromCache) {
-                    console.log(`🎯 Marking feedback state on server-rendered papers: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
-                    
-                    likedPapers.forEach(paperId => {
-                        const card = document.querySelector(`[data-paper-id="${paperId}"]`);
-                        if (card) {
-                            const btn = card.querySelector('.like-btn');
-                            if (btn) {
-                                btn.classList.add('active');
-                                btn.querySelector('.like-text').textContent = 'Liked!';
-                                console.log(`✅ Marked liked state for paper ${paperId}`);
-                            }
-                        }
-                    });
-
-                    dislikedPapers.forEach(paperId => {
-                        const card = document.querySelector(`[data-paper-id="${paperId}"]`);
-                        if (card) {
-                            const btn = card.querySelector('.dislike-btn');
-                            if (btn) {
-                                btn.classList.add('active');
-                                card.style.opacity = '0.3';
-                                card.style.transform = 'translateX(-20px)';
-                                console.log(`✅ Marked disliked state for paper ${paperId}`);
-                            }
-                        }
-                    });
-                }
-
-                // Observe all paper cards (both initial and restored)
-                document.querySelectorAll('.paper-card').forEach(card => {
-                    observer.observe(card);
-                });
+                // Initialize the view
+                initializeView();
 
                 // Auto-hide/show header on scroll
                 let lastScrollTop = 0;

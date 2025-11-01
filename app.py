@@ -536,29 +536,36 @@ async def get_likes(request: Request):
     
     # Fetch actual paper details from database
     liked_paper_ids = feedback.get('liked', [])
+    print(f"📂 /likes route: User {user_id} has {len(liked_paper_ids)} liked papers: {liked_paper_ids}")
     papers = []
     
     if liked_paper_ids:
-        # First, try to get papers from database
+        # First, try to get papers from database cache
         papers = await database.get_papers_by_ids(liked_paper_ids)
         papers_dict = {p['paperId']: p for p in papers}
+        print(f"   📚 Found {len(papers)} papers in database cache")
         
         # For any missing papers, fetch from OpenAlex
         missing_ids = [pid for pid in liked_paper_ids if pid not in papers_dict]
         
         if missing_ids:
-            print(f"📥 Fetching {len(missing_ids)} missing papers from OpenAlex...")
+            print(f"   📥 Fetching {len(missing_ids)} missing papers from OpenAlex...")
             for paper_id in missing_ids:
                 paper = await fetch_paper_by_openalex_id(paper_id)
                 if paper:
-                    # Save to database for future use
+                    # Save to database for future use (caching)
                     await database.save_paper(paper)
                     papers.append(paper)
-                    print(f"   ✅ Fetched and saved: {paper['title'][:50]}...")
+                    print(f"      ✅ Fetched and cached: {paper['title'][:50]}...")
+                else:
+                    print(f"      ❌ Failed to fetch paper: {paper_id}")
+        else:
+            print(f"   ✅ All papers found in cache, no API calls needed")
         
         # Sort papers by the order in liked_paper_ids (most recent first)
         papers_dict = {p['paperId']: p for p in papers}
         papers = [papers_dict[pid] for pid in liked_paper_ids if pid in papers_dict]
+        print(f"   📋 Returning {len(papers)} papers to template")
     
     return templates.TemplateResponse("likes.html", {
         "request": request,
@@ -612,13 +619,16 @@ async def like_paper_endpoint(request: Request, paper_id: str = Form(...), paper
     """Like a paper and save its metadata"""
     user = get_current_user(request)
     
-    # Save paper metadata if provided
+    # Save paper metadata if provided (for caching)
     if paper_data:
         try:
             paper_dict = json.loads(paper_data)
             await database.save_paper(paper_dict)
+            print(f"   💾 Cached paper metadata for: {paper_dict.get('title', 'Unknown')[:50]}")
         except Exception as e:
-            print(f"⚠️  Error parsing paper data: {e}")
+            print(f"   ⚠️  Error parsing paper data: {e}")
+    else:
+        print(f"   ⚠️  No paper metadata provided, will need to fetch from OpenAlex later")
     
     await database.like_paper(paper_id, user_id=user['id'])
     return {"status": "success"}
