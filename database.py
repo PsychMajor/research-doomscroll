@@ -106,6 +106,20 @@ async def init_db():
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_paper_id ON feedback(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_key ON paper_cache(cache_key, source)')
             
+            # Migration: Add user_id column to existing tables if it doesn't exist
+            try:
+                await conn.execute('''
+                    ALTER TABLE profiles 
+                    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+                ''')
+                await conn.execute('''
+                    ALTER TABLE feedback 
+                    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+                ''')
+                print("✅ Migration: user_id columns added/verified")
+            except Exception as migration_error:
+                print(f"⚠️  Migration warning: {migration_error}")
+            
         print("✅ Database initialized successfully")
     except Exception as e:
         print(f"⚠️  Database initialization failed: {e}")
