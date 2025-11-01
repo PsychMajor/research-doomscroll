@@ -136,8 +136,291 @@
             // Global observer for visibility tracking
             let observer = null;
 
+        // ============= CACHE MANAGEMENT =============
+        const CACHE_KEY = 'research_doomscroll_cache';
+        const CACHE_VERSION = '1.0';
+        const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+        function savePageState() {
+            try {
+                const feed = document.querySelector('.feed');
+                if (!feed) {
+                    console.log('⚠️  Cannot save: No feed element found');
+                    return;
+                }
+
+                // Collect all paper cards data
+                const papers = [];
+                document.querySelectorAll('.paper-card').forEach(card => {
+                    const paperJson = card.getAttribute('data-paper-json');
+                    if (paperJson) {
+                        papers.push(JSON.parse(paperJson));
+                    }
+                });
+
+                // Track which abstracts are expanded
+                const expandedAbstracts = [];
+                document.querySelectorAll('.abstract-content').forEach(abstract => {
+                    if (abstract.style.display !== 'none') {
+                        const paperId = abstract.id.replace('abstract-', '');
+                        expandedAbstracts.push(paperId);
+                    }
+                });
+
+                const state = {
+                    version: CACHE_VERSION,
+                    timestamp: Date.now(),
+                    scrollPosition: window.scrollY,
+                    searchParams: {
+                        topics: CURRENT_TOPICS,
+                        authors: CURRENT_AUTHORS,
+                        useRecommendations: USE_RECOMMENDATIONS
+                    },
+                    papers: papers,
+                    expandedAbstracts: expandedAbstracts,
+                    likedPapers: Array.from(likedPapers),
+                    dislikedPapers: Array.from(dislikedPapers)
+                };
+
+                localStorage.setItem(CACHE_KEY, JSON.stringify(state));
+                console.log('💾 CACHE SAVED:', {
+                    papers: papers.length,
+                    expandedAbstracts: expandedAbstracts.length,
+                    scrollPosition: window.scrollY,
+                    searchParams: state.searchParams,
+                    timestamp: new Date(state.timestamp).toLocaleTimeString()
+                });
+            } catch (error) {
+                console.error('❌ Error saving page state:', error);
+            }
+        }
+
+        function loadPageState() {
+            try {
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (!cached) {
+                    console.log('📂 No cache found in localStorage');
+                    return null;
+                }
+
+                const state = JSON.parse(cached);
+                
+                console.log('📂 CACHE FOUND:', {
+                    version: state.version,
+                    papers: state.papers.length,
+                    timestamp: new Date(state.timestamp).toLocaleTimeString(),
+                    age: Math.round((Date.now() - state.timestamp) / 1000 / 60) + ' minutes old',
+                    searchParams: state.searchParams
+                });
+                
+                // Check cache version and expiry
+                if (state.version !== CACHE_VERSION) {
+                    console.log('⚠️  Cache version mismatch (expected:', CACHE_VERSION, 'got:', state.version, '), clearing cache');
+                    localStorage.removeItem(CACHE_KEY);
+                    return null;
+                }
+
+                if (Date.now() - state.timestamp > CACHE_EXPIRY) {
+                    console.log('⏰ Cache expired (age:', Math.round((Date.now() - state.timestamp) / 1000 / 60 / 60), 'hours), clearing cache');
+                    localStorage.removeItem(CACHE_KEY);
+                    return null;
+                }
+
+                console.log('✅ Cache is valid and will be considered for restore');
+                return state;
+            } catch (error) {
+                console.error('❌ Error loading page state:', error);
+                return null;
+            }
+        }
+
+        function clearPageCache() {
+            localStorage.removeItem(CACHE_KEY);
+            console.log('🗑️  CACHE CLEARED - New search initiated');
+        }
+
+        function restorePageState(state) {
+            if (!state || !state.papers || state.papers.length === 0) {
+                console.log('⚠️  Cannot restore: No papers in cached state');
+                return false;
+            }
+
+            // Check if we're on the same search
+            const sameSearch = state.searchParams.topics === CURRENT_TOPICS &&
+                             state.searchParams.authors === CURRENT_AUTHORS;
+            
+            console.log('🔍 SEARCH COMPARISON:', {
+                cached: state.searchParams,
+                current: { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS },
+                sameSearch: sameSearch
+            });
+            
+            if (!sameSearch) {
+                console.log('🔄 Different search parameters detected, NOT restoring cache');
+                clearPageCache();
+                return false;
+            }
+
+            const feed = document.querySelector('.feed');
+            if (!feed) {
+                console.log('⚠️  Cannot restore: No feed element found');
+                return false;
+            }
+
+            console.log('🔄 RESTORING CACHE:', state.papers.length, 'papers');
+
+            // Build HTML for cached papers
+            let html = '';
+            state.papers.forEach((paper, index) => {
+                const cardNumber = index + 1;
+                const isExpanded = state.expandedAbstracts.includes(paper.paperId);
+                
+                html += `
+                <article class="paper-card" data-card-number="${cardNumber}" data-paper-id="${paper.paperId}" data-paper-json='${JSON.stringify(paper).replace(/'/g, "&apos;")}'>
+                    <div class="card-header">
+                        <h3 class="paper-title">${paper.title}</h3>
+                        <div class="paper-metadata">
+                            <span class="paper-authors">${paper.authors}</span>
+                            ${paper.year ? `<span class="paper-date">${paper.year}</span>` : ''}
+                            ${paper.venue ? `<span class="paper-venue">${paper.venue}</span>` : ''}
+                            ${paper.citationCount !== undefined ? `<span class="paper-citations">📊 ${paper.citationCount} citations</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="card-content">
+                        ${paper.tldr ? `
+                        <div class="paper-tldr">
+                            <strong>TL;DR:</strong> ${paper.tldr}
+                        </div>
+                        ` : ''}
+                        
+                        ${paper.abstract ? `
+                        <div class="abstract-section">
+                            <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
+                                <span class="toggle-icon">${isExpanded ? '▼' : '▶'}</span>
+                                <span class="toggle-text">Abstract</span>
+                            </button>
+                            <div id="abstract-${paper.paperId}" class="abstract-content" style="display: ${isExpanded ? 'block' : 'none'};">
+                                ${paper.abstract}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="card-footer">
+                        ${paper.url ? `
+                        <a href="${paper.url}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                            <span>Read on publisher's page</span>
+                            <span class="link-icon">↗</span>
+                        </a>
+                        ` : ''}
+                        <div class="card-actions">
+                            <button class="like-btn" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
+                                <span class="like-text">Like</span>
+                            </button>
+                            <button class="dislike-btn" onclick="dislikePaper('${paper.paperId}', event)" title="Dislike this paper">
+                                <span class="dislike-text">Pass</span>
+                            </button>
+                        </div>
+                    </div>
+                </article>
+                `;
+            });
+
+            feed.innerHTML = html;
+
+            // Restore feedback state UI
+            state.likedPapers.forEach(paperId => {
+                const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.querySelector('.like-text').textContent = 'Liked!';
+                }
+            });
+
+            state.dislikedPapers.forEach(paperId => {
+                const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
+                if (btn) {
+                    btn.classList.add('active');
+                    const card = btn.closest('.paper-card');
+                    card.style.opacity = '0.3';
+                    card.style.transform = 'translateX(-20px)';
+                }
+            });
+
+            // Re-setup observers for restored cards
+            document.querySelectorAll('.paper-card').forEach(card => {
+                if (observer) {
+                    observer.observe(card);
+                }
+            });
+
+            console.log('✨ RESTORE COMPLETE:', state.papers.length, 'papers restored');
+            
+            // Restore scroll position after a brief delay
+            setTimeout(() => {
+                window.scrollTo(0, state.scrollPosition);
+                console.log('📍 Scroll position restored:', state.scrollPosition);
+            }, 100);
+
+            return true;
+        }
+
+        // Auto-save state before leaving page
+        window.addEventListener('beforeunload', () => {
+            savePageState();
+        });
+
+        // Auto-save state periodically (every 30 seconds)
+        setInterval(() => {
+            savePageState();
+        }, 30000);
+
+        // Save state when scrolling stops
+        let scrollSaveTimeout;
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollSaveTimeout);
+            scrollSaveTimeout = setTimeout(() => {
+                savePageState();
+            }, 1000);
+        }, { passive: true });
+
+        // Save state when liking/disliking papers
+        const originalLikePaper = likePaper;
+        const originalDislikePaper = dislikePaper;
+
             // Page load initialization
             window.addEventListener('DOMContentLoaded', function() {
+                console.log('🚀 PAGE LOAD - Checking for cache...');
+                console.log('📋 Current search params:', { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS });
+                
+                // Try to restore from cache first
+                const cachedState = loadPageState();
+                let restoredFromCache = false;
+                
+                if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
+                    // Check if we're coming back to the same search
+                    const hasServerPapers = {{ 'true' if papers else 'false' }};
+                    const serverPaperCount = {{ papers|length if papers else 0 }};
+                    
+                    console.log('🔍 RESTORE DECISION:', {
+                        hasServerPapers: hasServerPapers,
+                        serverPaperCount: serverPaperCount,
+                        cachedPaperCount: cachedState.papers.length,
+                        willRestore: !hasServerPapers || cachedState.papers.length > serverPaperCount
+                    });
+                    
+                    // Only restore cache if we don't have fresh server data
+                    // (e.g., user clicked back from /likes page)
+                    if (!hasServerPapers || cachedState.papers.length > serverPaperCount) {
+                        restoredFromCache = restorePageState(cachedState);
+                    } else {
+                        console.log('📄 Using fresh server data instead of cache');
+                    }
+                } else {
+                    console.log('📄 No valid cache to restore, using server data');
+                }
+
                 // Hide initial page loader
                 const pageLoader = document.getElementById('pageLoader');
                 if (pageLoader) {
@@ -146,27 +429,29 @@
                         setTimeout(() => {
                             pageLoader.style.display = 'none';
                         }, 300);
-                    }, 500); // Show for at least 500ms
+                    }, restoredFromCache ? 200 : 500); // Faster if restoring from cache
                 }
 
                 // Don't auto-collapse - keep form visible so users can always access it
 
-                // Mark already rated papers
-                likedPapers.forEach(paperId => {
-                    const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
-                    if (btn) {
-                        btn.classList.add('active');
-                        btn.querySelector('.like-text').textContent = 'Liked!';
-                    }
-                });
+                // Mark already rated papers (if not restored from cache)
+                if (!restoredFromCache) {
+                    likedPapers.forEach(paperId => {
+                        const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
+                        if (btn) {
+                            btn.classList.add('active');
+                            btn.querySelector('.like-text').textContent = 'Liked!';
+                        }
+                    });
 
-                dislikedPapers.forEach(paperId => {
-                    const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
-                    if (btn) {
-                        const card = btn.closest('.paper-card');
-                        card.style.opacity = '0.3';
-                    }
-                });
+                    dislikedPapers.forEach(paperId => {
+                        const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
+                        if (btn) {
+                            const card = btn.closest('.paper-card');
+                            card.style.opacity = '0.3';
+                        }
+                    });
+                }
 
                 // Set up Intersection Observer to track card visibility
                 const observerOptions = {
@@ -281,6 +566,9 @@
             }
 
             function showFeedLoader() {
+                // Clear cache when performing a new search
+                clearPageCache();
+                
                 const feedLoader = document.getElementById('feedLoader');
                 if (feedLoader) {
                     feedLoader.classList.remove('hidden');
@@ -391,6 +679,7 @@
                             card.style.opacity = '1';
                             card.style.transform = 'translateX(0)';
                             updateFeedbackStats();
+                            savePageState(); // Save state after feedback change
                         }
                     } else {
                         // Like the paper
@@ -421,6 +710,7 @@
                             card.style.opacity = '1';
                             card.style.transform = 'translateX(0)';
                             updateFeedbackStats();
+                            savePageState(); // Save state after feedback change
                         }
                     }
                 } catch (error) {
@@ -451,6 +741,7 @@
                             card.style.opacity = '1';
                             card.style.transform = 'translateX(0)';
                             updateFeedbackStats();
+                            savePageState(); // Save state after feedback change
                         }
                     } else {
                         // Dislike the paper
@@ -485,6 +776,7 @@
                             card.style.opacity = '0.3';
                             card.style.transform = 'translateX(-20px)';
                             updateFeedbackStats();
+                            savePageState(); // Save state after feedback change
                         }
                     }
                 } catch (error) {
@@ -506,6 +798,9 @@
                     icon.textContent = '▶';
                     toggleButton.classList.remove('expanded');
                 }
+                
+                // Save state after toggling abstract
+                savePageState();
             }
 
             function showClearModal() {
@@ -623,6 +918,9 @@
                             btnIcon.textContent = '↓';
                         }, 2000);
                     }
+                    
+                    // Save state after loading more papers
+                    savePageState();
                 } catch (error) {
                     console.error('Error loading more papers:', error);
                     btn.disabled = false;
