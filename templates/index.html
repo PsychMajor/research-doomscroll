@@ -399,23 +399,20 @@
                 let restoredFromCache = false;
                 
                 if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
-                    // Check if we're coming back to the same search
-                    const hasServerPapers = {{ 'true' if papers else 'false' }};
                     const serverPaperCount = {{ papers|length if papers else 0 }};
                     
                     console.log('🔍 RESTORE DECISION:', {
-                        hasServerPapers: hasServerPapers,
                         serverPaperCount: serverPaperCount,
                         cachedPaperCount: cachedState.papers.length,
-                        willRestore: !hasServerPapers || cachedState.papers.length > serverPaperCount
+                        decision: cachedState.papers.length >= serverPaperCount ? 'RESTORE CACHE' : 'USE SERVER DATA'
                     });
                     
-                    // Only restore cache if we don't have fresh server data
-                    // (e.g., user clicked back from /likes page)
-                    if (!hasServerPapers || cachedState.papers.length > serverPaperCount) {
+                    // Prefer cache if it has same or more papers (means we loaded more)
+                    // This way returning from /likes will restore your full feed
+                    if (cachedState.papers.length >= serverPaperCount) {
                         restoredFromCache = restorePageState(cachedState);
                     } else {
-                        console.log('📄 Using fresh server data instead of cache');
+                        console.log('📄 Server has more papers, using fresh server data');
                     }
                 } else {
                     console.log('📄 No valid cache to restore, using server data');
@@ -566,8 +563,26 @@
             }
 
             function showFeedLoader() {
-                // Clear cache when performing a new search
-                clearPageCache();
+                // Only clear cache if search params are actually changing
+                const form = document.querySelector('.search-form');
+                const newTopics = form.querySelector('#topics').value.trim();
+                const newAuthors = form.querySelector('#authors').value.trim();
+                
+                const searchChanged = newTopics !== CURRENT_TOPICS || newAuthors !== CURRENT_AUTHORS;
+                
+                console.log('🔍 SEARCH SUBMISSION:', {
+                    currentTopics: CURRENT_TOPICS,
+                    currentAuthors: CURRENT_AUTHORS,
+                    newTopics: newTopics,
+                    newAuthors: newAuthors,
+                    searchChanged: searchChanged
+                });
+                
+                if (searchChanged) {
+                    clearPageCache();
+                } else {
+                    console.log('📌 Same search parameters, keeping cache');
+                }
                 
                 const feedLoader = document.getElementById('feedLoader');
                 if (feedLoader) {
