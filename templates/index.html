@@ -46,11 +46,11 @@
         
         <!-- Navigation Menu - Separate sticky element -->
         <nav class="nav-menu">
-            <a href="javascript:void(0)" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
+            <a href="/" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
-                <a href="/likes" class="nav-item" onclick="savePageState(); return true;">Folders</a>
+                <a href="/likes" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
-                    <a href="/likes" class="dropdown-item" onclick="savePageState(); return true;">Likes</a>
+                    <a href="/likes" class="dropdown-item">Likes</a>
                 </div>
             </div>
             <a href="#Following" class="nav-item">Following</a>
@@ -119,6 +119,250 @@
         </header>
 
     <script>
+        // ============= SPA FRAMEWORK (Twitter-style) =============
+        
+        /**
+         * Single Page Application Framework
+         * Handles routing, state management, and view transitions without full page reloads
+         */
+        class SPAFramework {
+            constructor() {
+                this.currentView = null;
+                this.viewCache = new Map(); // Cache view states
+                this.isNavigating = false;
+                
+                // Initialize on page load
+                this.init();
+            }
+            
+            init() {
+                console.log('🚀 SPA Framework initializing...');
+                
+                // Intercept all navigation
+                this.interceptLinks();
+                
+                // Handle browser back/forward
+                window.addEventListener('popstate', (e) => this.handlePopState(e));
+                
+                // Save state before leaving
+                window.addEventListener('beforeunload', () => this.saveCurrentView());
+                
+                console.log('✅ SPA Framework ready');
+            }
+            
+            interceptLinks() {
+                // Intercept all link clicks
+                document.addEventListener('click', (e) => {
+                    const link = e.target.closest('a[href]');
+                    if (!link) return;
+                    
+                    const href = link.getAttribute('href');
+                    
+                    // Skip external links, javascript:, mailto:, etc.
+                    if (!href || 
+                        href.startsWith('http://') || 
+                        href.startsWith('https://') ||
+                        href.startsWith('javascript:') ||
+                        href.startsWith('mailto:') ||
+                        href.startsWith('#')) {
+                        return;
+                    }
+                    
+                    // This is an internal navigation - handle with SPA
+                    e.preventDefault();
+                    this.navigateTo(href);
+                }, true); // Use capture phase
+            }
+            
+            async navigateTo(url, options = {}) {
+                if (this.isNavigating) {
+                    console.log('⚠️  Navigation in progress, skipping...');
+                    return;
+                }
+                
+                console.log('🔄 SPA navigating to:', url);
+                this.isNavigating = true;
+                
+                try {
+                    // Save current view state before leaving
+                    this.saveCurrentView();
+                    
+                    // Check if we have a cached view
+                    const cached = this.viewCache.get(url);
+                    
+                    if (cached && !options.forceReload) {
+                        console.log('📂 Restoring from view cache:', url);
+                        await this.restoreView(url, cached);
+                    } else {
+                        console.log('🌐 Fetching fresh view:', url);
+                        await this.fetchAndRenderView(url);
+                    }
+                    
+                    // Update browser history
+                    if (!options.replaceState) {
+                        window.history.pushState({ url, timestamp: Date.now() }, '', url);
+                    }
+                    
+                    this.currentView = url;
+                    
+                } catch (error) {
+                    console.error('❌ Navigation error:', error);
+                    // Fallback to full page load
+                    window.location.href = url;
+                } finally {
+                    this.isNavigating = false;
+                }
+            }
+            
+            saveCurrentView() {
+                const url = window.location.pathname + window.location.search;
+                console.log('💾 Saving current view:', url);
+                
+                // Save scroll position
+                const scrollY = window.scrollY;
+                
+                // Save main content
+                const container = document.querySelector('.container');
+                const html = container ? container.innerHTML : '';
+                
+                // Save any page-specific state (using existing cache functions)
+                if (typeof savePageState === 'function') {
+                    savePageState();
+                }
+                
+                this.viewCache.set(url, {
+                    html,
+                    scrollY,
+                    timestamp: Date.now()
+                });
+                
+                console.log('✅ View saved to cache');
+            }
+            
+            async restoreView(url, cached) {
+                console.log('🔄 Restoring cached view...');
+                
+                const container = document.querySelector('.container');
+                if (container) {
+                    // Restore HTML
+                    container.innerHTML = cached.html;
+                    
+                    // Restore scroll position
+                    requestAnimationFrame(() => {
+                        window.scrollTo(0, cached.scrollY);
+                        console.log('📍 Scroll restored to:', cached.scrollY);
+                    });
+                    
+                    // Reinitialize page-specific features
+                    this.reinitializeView();
+                }
+            }
+            
+            async fetchAndRenderView(url) {
+                console.log('⏳ Fetching:', url);
+                
+                // Show loading indicator
+                this.showLoadingIndicator();
+                
+                try {
+                    const response = await fetch(url, {
+                        headers: {
+                            'X-SPA-Request': 'true' // Signal to server this is an SPA request
+                        }
+                    });
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
+                    const html = await response.text();
+                    
+                    // Parse the HTML
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Extract the container content
+                    const newContainer = doc.querySelector('.container');
+                    const currentContainer = document.querySelector('.container');
+                    
+                    if (newContainer && currentContainer) {
+                        // Replace container content
+                        currentContainer.innerHTML = newContainer.innerHTML;
+                        
+                        // Update page title if needed
+                        const newTitle = doc.querySelector('title');
+                        if (newTitle) {
+                            document.title = newTitle.textContent;
+                        }
+                        
+                        // Scroll to top
+                        window.scrollTo(0, 0);
+                        
+                        // Reinitialize
+                        this.reinitializeView();
+                        
+                        console.log('✅ View rendered');
+                    }
+                    
+                } finally {
+                    this.hideLoadingIndicator();
+                }
+            }
+            
+            reinitializeView() {
+                console.log('🔧 Reinitializing view components...');
+                
+                // Reinitialize observers if they exist
+                if (typeof initializeObservers === 'function') {
+                    initializeObservers();
+                }
+                
+                // Restore feedback states
+                if (typeof markFeedbackStates === 'function') {
+                    markFeedbackStates();
+                }
+                
+                console.log('✅ View reinitialized');
+            }
+            
+            handlePopState(e) {
+                console.log('🔙 Browser back/forward:', e.state);
+                
+                const url = window.location.pathname + window.location.search;
+                
+                // Navigate without pushing new history
+                this.navigateTo(url, { replaceState: true });
+            }
+            
+            showLoadingIndicator() {
+                const loader = document.getElementById('pageLoader');
+                if (loader) {
+                    loader.classList.remove('hidden');
+                    loader.style.display = 'flex';
+                }
+            }
+            
+            hideLoadingIndicator() {
+                const loader = document.getElementById('pageLoader');
+                if (loader) {
+                    setTimeout(() => {
+                        loader.classList.add('hidden');
+                        setTimeout(() => {
+                            loader.style.display = 'none';
+                        }, 300);
+                    }, 200);
+                }
+            }
+            
+            clearCache() {
+                console.log('🗑️  Clearing view cache');
+                this.viewCache.clear();
+            }
+        }
+        
+        // Initialize SPA framework
+        const spa = new SPAFramework();
+        
+        // ============= APPLICATION STATE =============
+        
         // Store search parameters from the server
         const CURRENT_TOPICS = "{{ topics if topics else '' }}";
         const CURRENT_AUTHORS = "{{ authors if authors else '' }}";
