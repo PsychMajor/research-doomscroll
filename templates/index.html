@@ -46,7 +46,7 @@
         
         <!-- Navigation Menu - Separate sticky element -->
         <nav class="nav-menu">
-            <a href="#" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
+            <a href="javascript:void(0)" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
                 <a href="/likes" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
@@ -97,8 +97,8 @@
                         Sort By
                     </label>
                     <select id="sort_by" name="sort_by" class="form-input">
-                        <option value="relevance" {% if sort_by == 'relevance' or not sort_by %}selected{% endif %}>Relevance (Most Cited)</option>
-                        <option value="recency" {% if sort_by == 'recency' %}selected{% endif %}>Recency (Newest First)</option>
+                        <option value="recency" {% if sort_by == 'recency' or not sort_by %}selected{% endif %}>Recency (Newest First)</option>
+                        <option value="relevance" {% if sort_by == 'relevance' %}selected{% endif %}>Relevance (Most Cited)</option>
                     </select>
                     <span class="help-text">Choose how to order the results</span>
                 </div>
@@ -615,6 +615,14 @@
             
             function showSearchForm() {
                 const wrapper = document.getElementById('searchFormWrapper');
+                
+                // If wrapper doesn't exist, we're on a different page - navigate to home
+                if (!wrapper) {
+                    window.location.href = '/?show_form_only=true';
+                    return;
+                }
+                
+                // Show the form if we're already on the home page
                 if (wrapper) {
                     wrapper.classList.remove('hidden');
                     
@@ -633,6 +641,8 @@
                         });
                     }, 100); // Small delay to ensure the wrapper is visible
                 }
+                
+                console.log('📝 Search form shown (no auto-search)');
             }
             
             // Hide form on page load if there are papers

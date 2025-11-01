@@ -454,7 +454,7 @@ async def logout(request: Request):
 # ============================================================================
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, topics: str = "", authors: str = "", sort_by: str = "relevance"):
+async def home(request: Request, topics: str = "", authors: str = "", sort_by: str = "recency", show_form_only: bool = False):
     """Main homepage"""
     user = get_current_user(request)
     user_id = user['id']
@@ -462,6 +462,20 @@ async def home(request: Request, topics: str = "", authors: str = "", sort_by: s
     # Load user's profile and feedback
     profile = await database.load_profile(user_id=user_id)
     feedback = await database.load_feedback(user_id=user_id)
+    
+    # If show_form_only is True, don't auto-fetch papers
+    if show_form_only:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "user": user,
+            "papers": [],
+            "show_form": True,
+            "topics": ", ".join(profile.get("topics", [])),
+            "authors": ", ".join(profile.get("authors", [])),
+            "sort_by": sort_by,
+            "profile": profile,
+            "feedback": feedback
+        })
     
     # Parse topics and authors from query params or use profile
     topics_list = [t.strip() for t in topics.split(',') if t.strip()] if topics else profile.get("topics", [])
