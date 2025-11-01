@@ -201,43 +201,61 @@ def fetch_openalex_papers(topics=None, authors=None, per_page=25, page=1, sort_b
         "select": "id,title,abstract_inverted_index,primary_location,doi,publication_year,cited_by_count,authorships",  # Explicitly request fields including abstract
     }
     
-    # Build filters - OpenAlex requires using filter parameter (not search + filter together)
+    # Build filters - OpenAlex doesn't allow search + filter together
     filters = []
     
     # Get author IDs if authors are provided
     author_ids = []
     if authors:
-        print(f"🔍 Looking up author IDs for: {authors}")
+        print(f"🔍 Looking up author IDs for {len(authors)} author(s): {authors}")
         author_ids = get_author_ids(authors)
-        if not author_ids:
+        if author_ids:
+            print(f"   ✅ Found {len(author_ids)} author ID(s): {author_ids}")
+        else:
             print(f"   ⚠️ No author IDs found, will search by name instead")
     
-    # Add topic search using the search parameter (works better than filter for text search)
-    if topics:
-        topic_query = " ".join(topics)
-        params["search"] = topic_query
-    
-    # Add author filters using author IDs
+    # Strategy: Use search parameter if no author filters, otherwise use only filters
     if author_ids:
-        # Use author.id filter with the OpenAlex author IDs
-        # Multiple authors use OR logic (|)
-        author_filter = "|".join([f"author.id:{aid}" for aid in author_ids])
-        filters.append(author_filter)
-    elif authors and not author_ids:
-        # Fallback: if we couldn't get IDs, add authors to search parameter
-        if not topics:
-            params["search"] = " ".join(authors)
+        # We have author IDs, so we MUST use filter parameter
+        # For multiple authors with OR logic, we need to check if OpenAlex supports it
+        # If only one author, simple filter
+        if len(author_ids) == 1:
+            filters.append(f"authorships.author.id:{author_ids[0]}")
         else:
-            params["search"] = params["search"] + " " + " ".join(authors)
+            # Multiple authors - try OR syntax with pipe
+            # OpenAlex format: authorships.author.id:A123|A456 (not author.id:A123|author.id:A456)
+            author_ids_str = "|".join(author_ids)
+            filters.append(f"authorships.author.id:{author_ids_str}")
+        
+        # Add topic search using default.search filter instead of search parameter
+        # This allows filtering by keywords in title/abstract along with author filter
+        if topics:
+            # Use default.search for broader matching across title/abstract
+            topic_query = " ".join(topics)
+            filters.append(f"default.search:{topic_query}")
+    else:
+        # No author filters, use search parameter (better for topic-only searches)
+        if topics:
+            topic_query = " ".join(topics)
+            params["search"] = topic_query
+        
+        # Fallback: if we have author names but couldn't get IDs, add to search
+        if authors and not author_ids:
+            if not topics:
+                params["search"] = " ".join(authors)
+            else:
+                params["search"] = params["search"] + " " + " ".join(authors)
     
-    # Add filters to params
+    # Add filters to params (comma means AND in OpenAlex)
     if filters:
+        # Join multiple filters with comma (AND logic)
         params["filter"] = ",".join(filters)
     
     try:
         print(f"🔍 Fetching from OpenAlex: page={page}, topics={topics}, authors={authors}, sort={sort_by}")
         print(f"   Search: {params.get('search', 'N/A')}")
         print(f"   Filter: {params.get('filter', 'N/A')}")
+        print(f"   Full URL: {OPENALEX_API_URL}?{requests.compat.urlencode(params)}")
         response = requests.get(OPENALEX_API_URL, params=params, timeout=10)
         response.raise_for_status()
         
@@ -245,12 +263,18 @@ def fetch_openalex_papers(topics=None, authors=None, per_page=25, page=1, sort_b
         papers = []
         
         for work in data.get("results", []):
-            # Extract paper information
+            # Skip if work is None or has no ID
+            if not work or not work.get("id"):
+                print(f"⚠️  Skipping work with no ID")
+                continue
+                
+            # Extract paper information with safe null handling
+            primary_location = work.get("primary_location") or {}
             paper = {
                 "paperId": work.get("id", "").split("/")[-1],  # Extract ID from URL
-                "title": format_scientific_text(work.get("title", "Untitled")),  # Format title with sub/superscripts
+                "title": format_scientific_text(work.get("title") or "Untitled"),  # Format title with sub/superscripts
                 "abstract": work.get("abstract_inverted_index"),  # OpenAlex uses inverted index
-                "url": work.get("primary_location", {}).get("landing_page_url") or work.get("doi"),
+                "url": primary_location.get("landing_page_url") if isinstance(primary_location, dict) else None or work.get("doi"),
                 "year": work.get("publication_year"),
                 "citationCount": work.get("cited_by_count", 0),
                 "authors": [],
@@ -285,17 +309,19 @@ def fetch_openalex_papers(topics=None, authors=None, per_page=25, page=1, sort_b
             
             # Extract authors
             for authorship in work.get("authorships", [])[:10]:  # Limit to first 10 authors
-                author_info = authorship.get("author", {})
+                if not authorship:
+                    continue
+                author_info = authorship.get("author") or {}
                 if author_info.get("display_name"):
                     paper["authors"].append({
                         "name": author_info.get("display_name")
                     })
             
-            # Extract venue/journal
-            primary_location = work.get("primary_location", {})
-            if primary_location:
-                source = primary_location.get("source", {})
-                if source:
+            # Extract venue/journal with safe null handling
+            primary_location = work.get("primary_location") or {}
+            if isinstance(primary_location, dict):
+                source = primary_location.get("source") or {}
+                if isinstance(source, dict) and source.get("display_name"):
                     paper["venue"] = source.get("display_name")
             
             # Generate TL;DR using text summarization
@@ -484,7 +510,7 @@ async def home(request: Request, topics: str = "", authors: str = "", sort_by: s
     # Fetch papers from OpenAlex if we have topics or authors
     papers = []
     if topics_list or authors_list:
-        papers = fetch_openalex_papers(topics=topics_list, authors=authors_list, per_page=25, sort_by=sort_by)
+        papers = fetch_openalex_papers(topics=topics_list, authors=authors_list, per_page=200, sort_by=sort_by)
     
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -669,3 +695,72 @@ async def log_second_to_last(request: Request, card_number: int = Form(...), pap
     """Log when user views second-to-last card"""
     print(f"🔔 SECOND-TO-LAST CARD: User viewing card #{card_number} (Paper ID: {paper_id}) - {card_number} of {total_cards} cards")
     return {"status": "success"}
+
+# ============================================================================
+# API ROUTES FOR DYNAMIC PAPER FETCHING
+# ============================================================================
+
+@app.get("/api/fetch-papers")
+async def fetch_papers_api(request: Request, topics: str = "", authors: str = "", page: int = 1, per_page: int = 200, sort_by: str = "recency"):
+    """
+    API endpoint to fetch papers from OpenAlex
+    Returns papers as JSON for client-side pagination
+    """
+    try:
+        print(f"\n{'='*80}")
+        print(f"🔍 API /api/fetch-papers CALLED")
+        print(f"{'='*80}")
+        print(f"   Topics: {topics}")
+        print(f"   Authors: {authors}")
+        print(f"   Page: {page}")
+        print(f"   Per Page: {per_page}")
+        print(f"   Sort By: {sort_by}")
+        
+        # Parse topics and authors
+        topics_list = [t.strip() for t in topics.split(',') if t.strip()]
+        authors_list = [a.strip() for a in authors.split(',') if a.strip()]
+        
+        print(f"   Parsed topics: {topics_list}")
+        print(f"   Parsed authors: {authors_list}")
+        
+        # Fetch papers from OpenAlex
+        print(f"🌐 Calling fetch_openalex_papers()...")
+        papers = fetch_openalex_papers(
+            topics=topics_list if topics_list else None,
+            authors=authors_list if authors_list else None,
+            per_page=per_page,
+            page=page,
+            sort_by=sort_by
+        )
+        
+        print(f"✅ fetch_openalex_papers() returned {len(papers)} papers")
+        if papers:
+            print(f"   First paper: {papers[0]['title'][:50]}...")
+            print(f"   First paper ID: {papers[0]['paperId']}")
+        
+        result = {
+            "status": "success",
+            "papers": papers,
+            "page": page,
+            "per_page": per_page,
+            "count": len(papers)
+        }
+        
+        print(f"✅ API returning response with {len(papers)} papers")
+        print(f"{'='*80}\n")
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ ERROR in fetch-papers API: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
+        print(f"❌ Error details: {str(e)}")
+        import traceback
+        print(f"❌ Traceback:\n{traceback.format_exc()}")
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "error",
+            "message": str(e),
+            "papers": []
+        }

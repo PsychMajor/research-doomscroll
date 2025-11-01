@@ -48,9 +48,9 @@
         <nav class="nav-menu">
             <a href="javascript:void(0)" onclick="showSearchForm(); return false;" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
-                <a href="/likes" class="nav-item" onclick="savePageState()">Folders</a>
+                <a href="/likes" class="nav-item" onclick="savePageState(); return true;">Folders</a>
                 <div class="dropdown-menu">
-                    <a href="/likes" class="dropdown-item" onclick="savePageState()">Likes</a>
+                    <a href="/likes" class="dropdown-item" onclick="savePageState(); return true;">Likes</a>
                 </div>
             </div>
             <a href="#Following" class="nav-item">Following</a>
@@ -64,32 +64,32 @@
 
                 <div class="form-group">
                     <label for="topics">
-                        Topics & Keywords
+                        Topics & Keywords (Multiple Supported)
                     </label>
                     <input 
                         type="text" 
                         id="topics" 
                         name="topics" 
-                        placeholder="e.g., machine learning, neural networks, dopamine"
+                        placeholder="e.g., GPCR signaling, beta-adrenergic receptors, drug discovery"
                         value="{{ topics }}"
                         class="form-input"
                     >
-                    <span class="help-text">Enter research topics or keywords separated by commas</span>
+                    <span class="help-text">Separate multiple topics with commas - searches titles and abstracts</span>
                 </div>
                 
                 <div class="form-group">
                     <label for="authors">
-                        Authors
+                        Authors (Multiple Supported)
                     </label>
                     <input 
                         type="text" 
                         id="authors" 
                         name="authors" 
-                        placeholder="e.g., Samay R. Shah, Michael J Iadarola"
+                        placeholder="e.g., Brian Kobilka, Robert Lefkowitz, Roger Sunahara"
                         value="{{ authors }}"
                         class="form-input"
                     >
-                    <span class="help-text">Enter author names separated by commas (optional)</span>
+                    <span class="help-text">Separate multiple authors with commas - finds papers from ANY of these authors</span>
                 </div>
                 
                 <div class="form-group">
@@ -136,25 +136,46 @@
             // Global observer for visibility tracking
             let observer = null;
 
-        // ============= CACHE MANAGEMENT =============
+        // ============= PAGINATION MANAGEMENT =============
+        // Store all fetched papers and control progressive rendering
+        let allPapers = [];
+        let renderedCount = 0;
+        const PAPERS_PER_PAGE = 20;
+        
+        // Track if page was restored from cache (global scope)
+        let restoredFromCache = false;
+        
+        // Debug function to check pagination state
+        window.checkPaginationState = function() {
+            console.log('=== PAGINATION STATE DEBUG ===');
+            console.log('allPapers.length:', allPapers.length);
+            console.log('renderedCount:', renderedCount);
+            console.log('PAPERS_PER_PAGE:', PAPERS_PER_PAGE);
+            console.log('Cards in DOM:', document.querySelectorAll('.paper-card').length);
+            console.log('allPapers sample:', allPapers.slice(0, 3).map(p => p.title));
+            console.log('=============================');
+        };
+
+        // ============= CACHE MANAGEMENT (Session-based like Twitter) =============
         const CACHE_KEY = 'research_doomscroll_cache';
         const CACHE_VERSION = '1.0';
         const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
         function savePageState() {
             try {
+                console.log('💾 SAVE CALLED - Starting save process...');
                 const feed = document.querySelector('.feed');
                 if (!feed) {
                     console.log('⚠️  Cannot save: No feed element found');
                     return;
                 }
 
-                // Collect all paper cards data
-                const papers = [];
+                // Collect all paper cards data (both rendered and unrendered)
+                const visiblePapers = [];
                 document.querySelectorAll('.paper-card').forEach(card => {
                     const paperJson = card.getAttribute('data-paper-json');
                     if (paperJson) {
-                        papers.push(JSON.parse(paperJson));
+                        visiblePapers.push(JSON.parse(paperJson));
                     }
                 });
 
@@ -176,19 +197,35 @@
                         authors: CURRENT_AUTHORS,
                         useRecommendations: USE_RECOMMENDATIONS
                     },
-                    papers: papers,
+                    papers: visiblePapers,
+                    allPapers: allPapers, // Store all fetched papers
+                    renderedCount: renderedCount, // Store how many are rendered
                     expandedAbstracts: expandedAbstracts,
                     likedPapers: Array.from(likedPapers),
                     dislikedPapers: Array.from(dislikedPapers)
                 };
 
-                localStorage.setItem(CACHE_KEY, JSON.stringify(state));
-                console.log('💾 CACHE SAVED:', {
-                    papers: papers.length,
+                // Use sessionStorage for Twitter-like persistence
+                sessionStorage.setItem(CACHE_KEY, JSON.stringify(state));
+                
+                // Verify it was saved
+                const verification = sessionStorage.getItem(CACHE_KEY);
+                console.log('💾 STATE SAVED TO sessionStorage:', verification ? '✅ SUCCESS' : '❌ FAILED');
+                
+                // Also save to history state for back/forward navigation
+                window.history.replaceState(state, '', window.location.href);
+                console.log('💾 STATE SAVED TO history.state:', window.history.state ? '✅ SUCCESS' : '❌ FAILED');
+                
+                console.log('💾 FULL SAVE DETAILS:', {
+                    visiblePapers: visiblePapers.length,
+                    totalPapers: allPapers.length,
+                    renderedCount: renderedCount,
                     expandedAbstracts: expandedAbstracts.length,
                     scrollPosition: window.scrollY,
                     searchParams: state.searchParams,
-                    timestamp: new Date(state.timestamp).toLocaleTimeString()
+                    timestamp: new Date(state.timestamp).toLocaleTimeString(),
+                    cacheKey: CACHE_KEY,
+                    storageSize: JSON.stringify(state).length + ' bytes'
                 });
             } catch (error) {
                 console.error('❌ Error saving page state:', error);
@@ -197,17 +234,30 @@
 
         function loadPageState() {
             try {
-                const cached = localStorage.getItem(CACHE_KEY);
+                console.log('📂 LOAD CALLED - Checking for cached state...');
+                console.log('📂 Checking history.state:', window.history.state);
+                console.log('📂 Checking sessionStorage[' + CACHE_KEY + ']:', sessionStorage.getItem(CACHE_KEY) ? 'EXISTS' : 'NULL');
+                
+                // First check if we're navigating back via history
+                if (window.history.state && window.history.state.version === CACHE_VERSION) {
+                    console.log('📂 LOADING FROM HISTORY STATE (back/forward navigation)');
+                    return window.history.state;
+                }
+                
+                // Otherwise check sessionStorage
+                const cached = sessionStorage.getItem(CACHE_KEY);
                 if (!cached) {
-                    console.log('📂 No cache found in localStorage');
+                    console.log('📂 No cache found in sessionStorage');
                     return null;
                 }
 
                 const state = JSON.parse(cached);
                 
-                console.log('📂 CACHE FOUND:', {
+                console.log('📂 CACHE FOUND (sessionStorage):', {
                     version: state.version,
                     papers: state.papers.length,
+                    allPapers: state.allPapers ? state.allPapers.length : 'N/A',
+                    renderedCount: state.renderedCount,
                     timestamp: new Date(state.timestamp).toLocaleTimeString(),
                     age: Math.round((Date.now() - state.timestamp) / 1000 / 60) + ' minutes old',
                     searchParams: state.searchParams
@@ -216,13 +266,13 @@
                 // Check cache version and expiry
                 if (state.version !== CACHE_VERSION) {
                     console.log('⚠️  Cache version mismatch (expected:', CACHE_VERSION, 'got:', state.version, '), clearing cache');
-                    localStorage.removeItem(CACHE_KEY);
+                    sessionStorage.removeItem(CACHE_KEY);
                     return null;
                 }
 
                 if (Date.now() - state.timestamp > CACHE_EXPIRY) {
                     console.log('⏰ Cache expired (age:', Math.round((Date.now() - state.timestamp) / 1000 / 60 / 60), 'hours), clearing cache');
-                    localStorage.removeItem(CACHE_KEY);
+                    sessionStorage.removeItem(CACHE_KEY);
                     return null;
                 }
 
@@ -235,7 +285,7 @@
         }
 
         function clearPageCache() {
-            localStorage.removeItem(CACHE_KEY);
+            sessionStorage.removeItem(CACHE_KEY);
             console.log('🗑️  CACHE CLEARED - New search initiated');
         }
 
@@ -268,6 +318,27 @@
             }
 
             console.log('🔄 RESTORING CACHE:', state.papers.length, 'papers');
+            
+            // Hide page loader immediately when restoring from cache (no animation needed)
+            const pageLoader = document.getElementById('pageLoader');
+            if (pageLoader) {
+                pageLoader.style.display = 'none';
+            }
+            
+            // Hide search form immediately when restoring from cache (no animation)
+            const searchFormWrapper = document.getElementById('searchFormWrapper');
+            if (searchFormWrapper) {
+                searchFormWrapper.style.transition = 'none'; // Disable transition
+                searchFormWrapper.classList.add('hidden');
+                // Re-enable transitions after a frame so future interactions still animate
+                setTimeout(() => {
+                    searchFormWrapper.style.transition = '';
+                }, 0);
+            }
+
+            // CRITICAL: Clear existing server-rendered papers to avoid conflicts
+            feed.innerHTML = '';
+            console.log('🧹 Cleared existing feed content');
 
             // Build HTML for cached papers
             let html = '';
@@ -345,21 +416,40 @@
             feed.innerHTML = html;
 
             // Restore feedback state UI
+            console.log(`🎯 Restoring feedback state: ${state.likedPapers.length} liked, ${state.dislikedPapers.length} disliked`);
+            
             state.likedPapers.forEach(paperId => {
-                const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
-                if (btn) {
-                    btn.classList.add('active');
-                    btn.querySelector('.like-text').textContent = 'Liked!';
+                // Find card by data-paper-id attribute
+                const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                if (card) {
+                    const btn = card.querySelector('.like-btn');
+                    if (btn) {
+                        btn.classList.add('active');
+                        btn.querySelector('.like-text').textContent = 'Liked!';
+                        console.log(`✅ Restored liked state for paper ${paperId}`);
+                    } else {
+                        console.warn(`⚠️ Could not find like button for paper ${paperId}`);
+                    }
+                } else {
+                    console.warn(`⚠️ Could not find card for liked paper ${paperId}`);
                 }
             });
 
             state.dislikedPapers.forEach(paperId => {
-                const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
-                if (btn) {
-                    btn.classList.add('active');
-                    const card = btn.closest('.paper-card');
-                    card.style.opacity = '0.3';
-                    card.style.transform = 'translateX(-20px)';
+                // Find card by data-paper-id attribute
+                const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                if (card) {
+                    const btn = card.querySelector('.dislike-btn');
+                    if (btn) {
+                        btn.classList.add('active');
+                        card.style.opacity = '0.3';
+                        card.style.transform = 'translateX(-20px)';
+                        console.log(`✅ Restored disliked state for paper ${paperId}`);
+                    } else {
+                        console.warn(`⚠️ Could not find dislike button for paper ${paperId}`);
+                    }
+                } else {
+                    console.warn(`⚠️ Could not find card for disliked paper ${paperId}`);
                 }
             });
 
@@ -373,20 +463,28 @@
             console.log('✨ RESTORE COMPLETE:', state.papers.length, 'papers restored');
             
             // Restore scroll position after DOM is fully rendered
-            // Try immediately, then retry after animations complete
             const targetScrollPos = state.scrollPosition;
+            console.log(`📍 Target scroll position: ${targetScrollPos}px`);
             
-            // Immediate attempt
-            setTimeout(() => {
-                window.scrollTo(0, targetScrollPos);
-                console.log('📍 Scroll position restored (1st attempt):', targetScrollPos);
-            }, 100);
-            
-            // Retry after page fully renders (accounts for images, etc.)
-            setTimeout(() => {
-                window.scrollTo(0, targetScrollPos);
-                console.log('📍 Scroll position restored (2nd attempt):', targetScrollPos);
-            }, 500);
+            // Use requestAnimationFrame to ensure DOM has painted
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // Double RAF ensures layout is complete
+                    console.log(`📏 Document height after restore: ${document.documentElement.scrollHeight}px`);
+                    window.scrollTo(0, targetScrollPos);
+                    console.log(`✅ Scroll restored to ${targetScrollPos}px (current: ${window.scrollY}px)`);
+                    
+                    // Final check after images/content load
+                    setTimeout(() => {
+                        const currentScroll = window.scrollY;
+                        if (Math.abs(currentScroll - targetScrollPos) > 50) {
+                            console.log(`� Scroll position drifted, re-applying...`);
+                            window.scrollTo(0, targetScrollPos);
+                            console.log(`✅ Final scroll: ${window.scrollY}px`);
+                        }
+                    }, 300);
+                });
+            });
 
             return true;
         }
@@ -394,6 +492,15 @@
         // Auto-save state before leaving page
         window.addEventListener('beforeunload', () => {
             savePageState();
+        });
+        
+        // Handle back/forward navigation (Twitter-style)
+        window.addEventListener('popstate', (event) => {
+            console.log('🔙 Browser back/forward navigation detected');
+            if (event.state && event.state.version === CACHE_VERSION) {
+                console.log('📂 Restoring from history state...');
+                location.reload(); // Reload to restore from cache
+            }
         });
 
         // Auto-save state periodically (every 30 seconds)
@@ -419,63 +526,8 @@
                 console.log('🚀 PAGE LOAD - Checking for cache...');
                 console.log('📋 Current search params:', { topics: CURRENT_TOPICS, authors: CURRENT_AUTHORS });
                 
-                // Try to restore from cache first
-                const cachedState = loadPageState();
-                let restoredFromCache = false;
-                
-                if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
-                    const serverPaperCount = {{ papers|length if papers else 0 }};
-                    
-                    console.log('🔍 RESTORE DECISION:', {
-                        serverPaperCount: serverPaperCount,
-                        cachedPaperCount: cachedState.papers.length,
-                        decision: cachedState.papers.length >= serverPaperCount ? 'RESTORE CACHE' : 'USE SERVER DATA'
-                    });
-                    
-                    // Prefer cache if it has same or more papers (means we loaded more)
-                    // This way returning from /likes will restore your full feed
-                    if (cachedState.papers.length >= serverPaperCount) {
-                        restoredFromCache = restorePageState(cachedState);
-                    } else {
-                        console.log('📄 Server has more papers, using fresh server data');
-                    }
-                } else {
-                    console.log('📄 No valid cache to restore, using server data');
-                }
-
-                // Hide initial page loader
-                const pageLoader = document.getElementById('pageLoader');
-                if (pageLoader) {
-                    setTimeout(() => {
-                        pageLoader.classList.add('hidden');
-                        setTimeout(() => {
-                            pageLoader.style.display = 'none';
-                        }, 300);
-                    }, restoredFromCache ? 200 : 500); // Faster if restoring from cache
-                }
-
-                // Don't auto-collapse - keep form visible so users can always access it
-
-                // Mark already rated papers (if not restored from cache)
-                if (!restoredFromCache) {
-                    likedPapers.forEach(paperId => {
-                        const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.like-btn');
-                        if (btn) {
-                            btn.classList.add('active');
-                            btn.querySelector('.like-text').textContent = 'Liked!';
-                        }
-                    });
-
-                    dislikedPapers.forEach(paperId => {
-                        const btn = document.querySelector(`[onclick*="${paperId}"]`)?.closest('.card-actions')?.querySelector('.dislike-btn');
-                        if (btn) {
-                            const card = btn.closest('.paper-card');
-                            card.style.opacity = '0.3';
-                        }
-                    });
-                }
-
-                // Set up Intersection Observer to track card visibility
+                // Set up Intersection Observer FIRST (before any cache restoration)
+                // This ensures it's available when restorePageState() needs it
                 const observerOptions = {
                     root: null, // viewport
                     rootMargin: '0px',
@@ -497,15 +549,39 @@
                                 // Check if this is the second-to-last card
                                 const allCards = document.querySelectorAll('.paper-card');
                                 const currentIndex = Array.from(allCards).indexOf(card);
+                                
+                                console.log(`📍 Card visible: #${cardNumber} (index ${currentIndex} of ${allCards.length} total cards)`);
+                                console.log(`📊 Pagination state: ${renderedCount} rendered of ${allPapers.length} total papers`);
+                                
                                 if (currentIndex === allCards.length - 2) {
-                                    console.log(`🔔 SECOND-TO-LAST CARD: Viewing card #${cardNumber} (${currentIndex + 1} of ${allCards.length}) - Auto-loading more papers...`);
+                                    console.log(`🔔 SECOND-TO-LAST CARD DETECTED: Card #${cardNumber} (${currentIndex + 1} of ${allCards.length})`);
                                     logSecondToLastCard(cardNumber, paperId, allCards.length);
                                     
-                                    // Automatically trigger load more papers
-                                    const loadMoreBtn = document.getElementById('loadMoreBtn');
-                                    if (loadMoreBtn && !loadMoreBtn.disabled) {
-                                        console.log('🔄 Auto-triggering "Load More Papers"...');
-                                        loadMorePapers();
+                                    // Calculate remaining unrendered papers
+                                    const remainingPapers = allPapers.length - renderedCount;
+                                    
+                                    console.log(`📊 DETAILED STATE:`, {
+                                        allPapersLength: allPapers.length,
+                                        renderedCount: renderedCount,
+                                        remainingPapers: remainingPapers,
+                                        allCardsLength: allCards.length,
+                                        currentIndex: currentIndex
+                                    });
+                                    
+                                    // Automatically render next batch from cached papers
+                                    if (remainingPapers > 0) {
+                                        console.log(`🔄 Auto-rendering next batch... (${allPapers.length} total, ${renderedCount} currently rendered, ${remainingPapers} remaining)`);
+                                        renderNextBatch();
+                                    } else {
+                                        console.log(`✅ All cached papers rendered (${renderedCount}/${allPapers.length})`);
+                                        console.log(`🔍 Checking if we need to fetch more papers...`);
+                                        console.log(`   allPapers.length = ${allPapers.length}`);
+                                        console.log(`   threshold = 40`);
+                                        console.log(`   Should fetch? ${allPapers.length < 40 ? 'YES' : 'NO - count is >= 40'}`);
+                                        
+                                        // ALWAYS try to fetch more when we've rendered all papers
+                                        console.log(`🌐 Attempting to fetch more unique papers (current total: ${allPapers.length})...`);
+                                        fetchMoreUniquePapers();
                                     }
                                 }
                             }
@@ -513,7 +589,101 @@
                     });
                 }, observerOptions);
 
-                // Observe all paper cards
+                // Initialize pagination from server-rendered papers
+                const serverPapers = {{ papers | tojson | safe }};
+                console.log('🔧 SERVER PAPERS:', serverPapers ? serverPapers.length : 0, 'papers received');
+                
+                if (serverPapers && serverPapers.length > 0) {
+                    allPapers = serverPapers;
+                    // Count how many are currently rendered in the DOM
+                    renderedCount = document.querySelectorAll('.paper-card').length;
+                    console.log(`📊 PAGINATION INITIALIZED: ${allPapers.length} papers fetched, ${renderedCount} rendered, ${PAPERS_PER_PAGE} per page`);
+                    console.log(`📊 First paper title:`, allPapers[0].title);
+                    console.log(`📊 Can load more?`, renderedCount < allPapers.length);
+                }
+                
+                // Try to restore from cache first
+                const cachedState = loadPageState();
+                restoredFromCache = false;  // Reset the global variable
+                
+                if (cachedState && cachedState.papers && cachedState.papers.length > 0) {
+                    const serverPaperCount = serverPapers ? serverPapers.length : 0;
+                    
+                    console.log('🔍 RESTORE DECISION:', {
+                        serverPaperCount: serverPaperCount,
+                        cachedPaperCount: cachedState.papers.length,
+                        decision: cachedState.papers.length >= serverPaperCount ? 'RESTORE CACHE' : 'USE SERVER DATA'
+                    });
+                    
+                    // Prefer cache if it has same or more papers (means we loaded more)
+                    // This way returning from /likes will restore your full feed
+                    if (cachedState.papers.length >= serverPaperCount) {
+                        restoredFromCache = restorePageState(cachedState);
+                        if (restoredFromCache) {
+                            // Restore pagination state from cache
+                            allPapers = cachedState.allPapers || cachedState.papers;
+                            renderedCount = cachedState.renderedCount || cachedState.papers.length;
+                            console.log(`📊 PAGINATION RESTORED FROM CACHE: ${allPapers.length} total, ${renderedCount} rendered`);
+                            
+                            // CRITICAL: Verify restoration is complete
+                            const actualCardsOnPage = document.querySelectorAll('.paper-card').length;
+                            console.log(`🔍 VERIFICATION: Expected ${cachedState.papers.length} cards, found ${actualCardsOnPage} on page`);
+                            
+                            if (actualCardsOnPage !== cachedState.papers.length) {
+                                console.error(`❌ MISMATCH: Card count doesn't match cache!`);
+                            }
+                        }
+                    } else {
+                        console.log('📄 Server has more papers, using fresh server data');
+                    }
+                } else {
+                    console.log('📄 No valid cache to restore, using server data');
+                }
+
+                // Hide initial page loader (only if not already hidden by cache restore)
+                const pageLoader = document.getElementById('pageLoader');
+                if (pageLoader && pageLoader.style.display !== 'none') {
+                    setTimeout(() => {
+                        pageLoader.classList.add('hidden');
+                        setTimeout(() => {
+                            pageLoader.style.display = 'none';
+                        }, 300);
+                    }, 500);
+                }
+
+                // Don't auto-collapse - keep form visible so users can always access it
+
+                // Mark already rated papers (if not restored from cache)
+                if (!restoredFromCache) {
+                    console.log(`🎯 Marking feedback state on server-rendered papers: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
+                    
+                    likedPapers.forEach(paperId => {
+                        const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                        if (card) {
+                            const btn = card.querySelector('.like-btn');
+                            if (btn) {
+                                btn.classList.add('active');
+                                btn.querySelector('.like-text').textContent = 'Liked!';
+                                console.log(`✅ Marked liked state for paper ${paperId}`);
+                            }
+                        }
+                    });
+
+                    dislikedPapers.forEach(paperId => {
+                        const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                        if (card) {
+                            const btn = card.querySelector('.dislike-btn');
+                            if (btn) {
+                                btn.classList.add('active');
+                                card.style.opacity = '0.3';
+                                card.style.transform = 'translateX(-20px)';
+                                console.log(`✅ Marked disliked state for paper ${paperId}`);
+                            }
+                        }
+                    });
+                }
+
+                // Observe all paper cards (both initial and restored)
                 document.querySelectorAll('.paper-card').forEach(card => {
                     observer.observe(card);
                 });
@@ -627,8 +797,10 @@
                 const wrapper = document.getElementById('searchFormWrapper');
                 
                 // If wrapper doesn't exist, we're on a different page - navigate to home
+                // This will restore cached state if available
                 if (!wrapper) {
-                    window.location.href = '/?show_form_only=true';
+                    console.log('🔙 Navigating to home page (will restore cache if available)');
+                    window.location.href = '/';
                     return;
                 }
                 
@@ -655,13 +827,14 @@
                 console.log('📝 Search form shown (no auto-search)');
             }
             
-            // Hide form on page load if there are papers
+            // Hide form on page load if there are papers (but not if restored from cache)
             document.addEventListener('DOMContentLoaded', function() {
                 const wrapper = document.getElementById('searchFormWrapper');
                 // Check if there are papers in the feed
                 const papers = {{ papers | tojson | safe }};
                 
-                if (papers && papers.length > 0 && wrapper) {
+                // Only hide with animation if we have papers AND didn't restore from cache
+                if (papers && papers.length > 0 && wrapper && !restoredFromCache) {
                     // Add a small delay to ensure smooth transition
                     setTimeout(() => {
                         wrapper.classList.add('hidden');
@@ -703,6 +876,236 @@
                 toggleBtn.classList.remove('collapsed');
             }
         }
+
+        // ============= PAGINATION: Render Next Batch =============
+        function renderNextBatch() {
+            console.log(`🎯 renderNextBatch() called - renderedCount: ${renderedCount}, allPapers.length: ${allPapers.length}`);
+            
+            if (renderedCount >= allPapers.length) {
+                console.log(`✅ All papers loaded (${allPapers.length} of ${allPapers.length})`);
+                return false;
+            }
+
+            const nextBatch = allPapers.slice(renderedCount, renderedCount + PAPERS_PER_PAGE);
+            if (nextBatch.length === 0) {
+                console.log(`✅ No more papers to render`);
+                return false;
+            }
+
+            console.log(`📄 Loading next ${nextBatch.length} papers (currently showing ${renderedCount} of ${allPapers.length})`);
+            console.log(`📄 Next batch papers:`, nextBatch.map(p => p.title).slice(0, 3));
+
+            const feed = document.querySelector('.feed');
+            if (!feed) {
+                console.error('❌ Cannot render: No feed element found');
+                return false;
+            }
+
+            // Create and append cards for next batch
+            nextBatch.forEach((paper, index) => {
+                const cardNumber = renderedCount + index + 1;
+                const card = createPaperCard(paper, cardNumber);
+                feed.appendChild(card);
+            });
+
+            renderedCount += nextBatch.length;
+            
+            // Set up observers for new cards
+            if (observer) {
+                document.querySelectorAll('.paper-card').forEach(card => {
+                    observer.observe(card);
+                });
+            }
+
+            // Save state with updated rendered count
+            savePageState();
+
+            console.log(`✅ Rendered ${nextBatch.length} papers. Total visible: ${renderedCount} of ${allPapers.length}`);
+            return true;
+        }
+
+        // ============= FETCH MORE UNIQUE PAPERS =============
+        async function fetchMoreUniquePapers() {
+            console.log('🔄 ========================================');
+            console.log('🔄 fetchMoreUniquePapers() CALLED');
+            console.log('🔄 ========================================');
+            
+            // Get existing paper IDs to avoid duplicates
+            const existingPaperIds = new Set(allPapers.map(p => p.paperId));
+            console.log(`📋 Existing paper IDs: ${existingPaperIds.size} papers`);
+            console.log(`📋 First 5 IDs:`, Array.from(existingPaperIds).slice(0, 5));
+            
+            // Calculate which page to fetch (we fetched 200 papers initially, so page 2)
+            const currentPage = Math.floor(allPapers.length / 200) + 1;
+            console.log(`📄 Current page to fetch: ${currentPage} (based on ${allPapers.length} papers)`);
+            
+            try {
+                // Build fetch URL with same search params
+                const params = new URLSearchParams();
+                if (CURRENT_TOPICS) {
+                    params.append('topics', CURRENT_TOPICS);
+                    console.log(`🔍 Topics: ${CURRENT_TOPICS}`);
+                }
+                if (CURRENT_AUTHORS) {
+                    params.append('authors', CURRENT_AUTHORS);
+                    console.log(`👤 Authors: ${CURRENT_AUTHORS}`);
+                }
+                params.append('page', currentPage);
+                params.append('per_page', 200);
+                params.append('sort_by', 'recency');
+                
+                const url = `/api/fetch-papers?${params.toString()}`;
+                console.log(`🌐 Fetching from URL: ${url}`);
+                
+                console.log(`⏳ Sending fetch request...`);
+                const response = await fetch(url);
+                console.log(`✅ Response received, status: ${response.status}`);
+                
+                const data = await response.json();
+                console.log(`📥 Response data:`, {
+                    status: data.status,
+                    paperCount: data.papers ? data.papers.length : 0,
+                    page: data.page,
+                    per_page: data.per_page,
+                    hasError: data.message ? true : false,
+                    errorMessage: data.message || 'none'
+                });
+                
+                if (data.papers && data.papers.length > 0) {
+                    console.log(`📝 First paper from API:`, {
+                        id: data.papers[0].paperId,
+                        title: data.papers[0].title.substring(0, 50) + '...'
+                    });
+                    
+                    // Filter out duplicates
+                    const newPapers = data.papers.filter(paper => {
+                        const isDuplicate = existingPaperIds.has(paper.paperId);
+                        if (isDuplicate) {
+                            console.log(`   ⚠️ Duplicate found: ${paper.paperId}`);
+                        }
+                        return !isDuplicate;
+                    });
+                    
+                    console.log(`✨ Deduplication results:`);
+                    console.log(`   Received: ${data.papers.length} papers`);
+                    console.log(`   Duplicates: ${data.papers.length - newPapers.length} papers`);
+                    console.log(`   New unique: ${newPapers.length} papers`);
+                    
+                    if (newPapers.length > 0) {
+                        console.log(`📚 Adding ${newPapers.length} new papers to allPapers array...`);
+                        
+                        // Add new papers to allPapers array
+                        const beforeCount = allPapers.length;
+                        allPapers.push(...newPapers);
+                        const afterCount = allPapers.length;
+                        
+                        console.log(`📚 Total papers: ${beforeCount} → ${afterCount} (+${afterCount - beforeCount})`);
+                        
+                        // Automatically render the first batch of new papers
+                        console.log(`🎨 Calling renderNextBatch() to display new papers...`);
+                        const rendered = renderNextBatch();
+                        console.log(`🎨 renderNextBatch() returned: ${rendered}`);
+                        
+                        // Save updated cache
+                        console.log(`💾 Saving updated cache...`);
+                        savePageState();
+                        
+                        console.log(`✅ SUCCESS: Added ${newPapers.length} new unique papers`);
+                        console.log(`✅ Current state: ${renderedCount} rendered of ${allPapers.length} total`);
+                    } else {
+                        console.log(`⚠️ No new unique papers found (all ${data.papers.length} were duplicates)`);
+                    }
+                } else {
+                    console.log(`⚠️ No papers in API response`);
+                    if (data.message) {
+                        console.log(`   Error message: ${data.message}`);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ ERROR in fetchMoreUniquePapers:', error);
+                console.error('❌ Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+            }
+            
+            console.log('🔄 ========================================');
+            console.log('🔄 fetchMoreUniquePapers() COMPLETE');
+            console.log('🔄 ========================================');
+        }
+
+        // Helper function to create a paper card element from paper data
+        function createPaperCard(paper, cardNumber) {
+            const article = document.createElement('article');
+            article.className = 'paper-card';
+            article.setAttribute('data-card-number', cardNumber);
+            article.setAttribute('data-paper-id', paper.paperId);
+            article.setAttribute('data-paper-json', JSON.stringify(paper));
+
+            // Format authors
+            let authorsHtml = '';
+            if (paper.authors && Array.isArray(paper.authors)) {
+                if (paper.authors.length <= 4) {
+                    authorsHtml = paper.authors.map(a => a.name || a).join(', ');
+                } else {
+                    const first = paper.authors[0].name || paper.authors[0];
+                    const second = paper.authors[1].name || paper.authors[1];
+                    const secondLast = paper.authors[paper.authors.length - 2].name || paper.authors[paper.authors.length - 2];
+                    const last = paper.authors[paper.authors.length - 1].name || paper.authors[paper.authors.length - 1];
+                    authorsHtml = `${first}, ${second}, ... ${secondLast}, ${last}`;
+                }
+            } else if (typeof paper.authors === 'string') {
+                authorsHtml = paper.authors;
+            }
+
+            article.innerHTML = `
+                <div class="card-header">
+                    <div class="paper-meta">
+                        <h2 class="paper-title">${paper.title || 'Untitled'}</h2>
+                        <div class="paper-info">
+                            ${authorsHtml ? `<span class="authors">${authorsHtml}</span>` : ''}
+                            <span class="separator">•</span>
+                            <span class="year">${paper.year || ''}</span>
+                            ${paper.venue ? `<span class="separator">•</span><span class="venue">${paper.venue}</span>` : ''}
+                            ${paper.citationCount > 0 ? `<span class="separator">•</span><span class="citations">${paper.citationCount} citations</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                ${paper.tldr ? `<div class="paper-tldr"><strong>TL;DR:</strong> ${paper.tldr}</div>` : ''}
+
+                <div class="paper-abstract-container">
+                    <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
+                        <span class="toggle-icon">▶</span>
+                        <span class="toggle-text">Abstract</span>
+                    </button>
+                    <div class="paper-abstract" id="abstract-${paper.paperId}" style="display: none;">
+                        ${paper.abstract ? paper.abstract : '<em class="no-abstract">No abstract available</em>'}
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    ${paper.url ? `
+                        <a href="${paper.url}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                            <span>Read on ${paper.source === 'bioRxiv' ? 'bioRxiv' : paper.source === 'OpenAlex' ? "publisher's page" : 'Semantic Scholar'}</span>
+                            <span class="link-icon">↗</span>
+                        </a>
+                    ` : ''}
+                    <div class="card-actions">
+                        <button class="like-btn ${likedPapers.has(paper.paperId) ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
+                            <span class="like-text">${likedPapers.has(paper.paperId) ? 'Liked' : 'Like'}</span>
+                        </button>
+                        <button class="dislike-btn ${dislikedPapers.has(paper.paperId) ? 'active' : ''}" onclick="dislikePaper('${paper.paperId}', event)" title="Dislike this paper">
+                            <span class="dislike-text">Pass</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            return article;
+        }
+
 
         async function likePaper(paperId, event) {
                 try {
@@ -983,75 +1386,6 @@
                     }, 3000);
                 }
             }
-
-            function createPaperCard(paper, cardNumber) {
-                const isLiked = likedPapers.has(paper.paperId);
-                const isDisliked = dislikedPapers.has(paper.paperId);
-                
-                const authorsHtml = paper.authors && paper.authors.length > 0 
-                    ? `<span class="authors">
-                        ${paper.authors.slice(0, 3).map(a => a.name).join(', ')}
-                        ${paper.authors.length > 3 ? `<span class="more-authors">+${paper.authors.length - 3} more</span>` : ''}
-                       </span>
-                       <span class="separator">•</span>`
-                    : '';
-                
-                const venueHtml = paper.venue 
-                    ? `<span class="separator">•</span><span class="venue">${paper.venue}</span>`
-                    : '';
-                
-                const citationsHtml = paper.citationCount > 0 
-                    ? `<span class="separator">•</span><span class="citations">${paper.citationCount} citations</span>`
-                    : '';
-                
-                const tldrHtml = paper.tldr 
-                    ? `<div class="paper-tldr"><strong>TL;DR:</strong> ${paper.tldr}</div>`
-                    : '';
-                
-                const linkText = paper.source === 'bioRxiv' ? 'Read on bioRxiv' : 'Read on Semantic Scholar';
-                
-                return `
-                    <article class="paper-card" data-card-number="${cardNumber}" data-paper-id="${paper.paperId}">
-                        <div class="card-header">
-                            <div class="paper-meta">
-                                <h2 class="paper-title">${paper.title}</h2>
-                                <div class="paper-info">
-                                    ${authorsHtml}
-                                    <span class="year">${paper.year}</span>
-                                    ${venueHtml}
-                                    ${citationsHtml}
-                                    <span class="separator">•</span>
-                                    <span class="source-badge">${paper.source}</span>
-                                </div>
-                            </div>
-                        </div>
-                        ${tldrHtml}
-                        <div class="paper-abstract-container">
-                            <button class="abstract-toggle" onclick="toggleAbstract('${paper.paperId}')">
-                                <span class="toggle-icon">▶</span>
-                                <span class="toggle-text">Abstract</span>
-                            </button>
-                            <div class="paper-abstract" id="abstract-${paper.paperId}" style="display: none;">
-                                ${paper.abstract || '<em class="no-abstract">No abstract available</em>'}
-                            </div>
-                        </div>
-                        <div class="card-footer">
-                            <a href="${paper.url}" class="paper-link" target="_blank" rel="noopener noreferrer">
-                                <span>${linkText}</span>
-                                <span class="link-icon">↗</span>
-                            </a>
-                            <div class="card-actions">
-                                <button class="like-btn ${isLiked ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
-                                    <span class="like-text">${isLiked ? 'Liked!' : 'Like'}</span>
-                                </button>
-                                <button class="dislike-btn ${isDisliked ? 'active' : ''}" onclick="dislikePaper('${paper.paperId}', event)" title="Dislike this paper">
-                                    <span class="dislike-text">Pass</span>
-                                </button>
-                            </div>
-                        </div>
-                    </article>
-                `;
-            }
         </script>
 
         <!-- Paper Sidebar -->
@@ -1095,7 +1429,7 @@
         {% endif %}
 
         <div class="feed" id="feedContainer">
-            {% for paper in papers %}
+            {% for paper in papers[:20] %}
             <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}" data-paper-json='{{ paper | tojson | safe }}'>
                 <div class="card-header">
                     <div class="paper-meta">
