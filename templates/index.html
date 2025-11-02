@@ -70,7 +70,7 @@
         
         <!-- Navigation Menu - Separate sticky element -->
         <nav class="nav-menu">
-            <a href="/" class="nav-item active">Search</a>
+            <a href="javascript:void(0)" onclick="toggleSearchForm()" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
                 <a href="/folders" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
@@ -165,7 +165,6 @@
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
                 this.CACHE_VERSION = '15.0'; // Removed SVG, clean blue box with "Add" text only
-                this.lastSearchUrl = null; // Track last search results page
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -185,22 +184,6 @@
             
             init() {
                 console.log('🚀 SPA Framework initializing...');
-                
-                // Check if we're on a search page and track it
-                const currentUrl = window.location.pathname + window.location.search;
-                if (currentUrl.includes('topics=') || currentUrl.includes('authors=')) {
-                    this.lastSearchUrl = currentUrl;
-                    sessionStorage.setItem('lastSearchUrl', currentUrl);
-                    console.log('📍 Initial search URL:', currentUrl);
-                } else {
-                    // Try to restore from sessionStorage
-                    const savedUrl = sessionStorage.getItem('lastSearchUrl');
-                    if (savedUrl) {
-                        this.lastSearchUrl = savedUrl;
-                        console.log('📍 Restored search URL from storage:', savedUrl);
-                        this.updateSearchNavLink();
-                    }
-                }
                 
                 // Intercept all navigation
                 this.interceptLinks();
@@ -269,9 +252,6 @@
                     
                     this.currentView = url;
                     
-                    // Update Search nav link if needed
-                    this.updateSearchNavLink();
-                    
                 } catch (error) {
                     console.error('❌ Navigation error:', error);
                     // Fallback to full page load
@@ -284,16 +264,6 @@
             saveCurrentView() {
                 const url = window.location.pathname + window.location.search;
                 console.log('💾 Saving current view:', url);
-                
-                // Track if this is a search results page
-                if (url.includes('topics=') || url.includes('authors=')) {
-                    this.lastSearchUrl = url;
-                    // Save to sessionStorage so it persists across page loads
-                    sessionStorage.setItem('lastSearchUrl', url);
-                    console.log('📍 Saved last search URL:', url);
-                    // Update the Search nav link to point to this URL
-                    this.updateSearchNavLink();
-                }
                 
                 // Save scroll position
                 const scrollY = window.scrollY;
@@ -314,14 +284,6 @@
                 });
                 
                 console.log('✅ View saved to cache');
-            }
-            
-            updateSearchNavLink() {
-                const searchNavLink = document.querySelector('.nav-menu a[href="/"]');
-                if (searchNavLink && this.lastSearchUrl) {
-                    searchNavLink.setAttribute('href', this.lastSearchUrl);
-                    console.log('🔗 Updated Search nav link to:', this.lastSearchUrl);
-                }
             }
             
             async restoreView(url, cached) {
@@ -1935,7 +1897,7 @@
             }
 
             async function removePaperFromFolder(paperId, folderId) {
-                if (!confirm('Remove this paper from the folder?')) return;
+                console.log('DELETE:', paperId, 'from folder:', folderId);
                 
                 try {
                     const formData = new FormData();
@@ -1968,19 +1930,10 @@
                             
                             setTimeout(() => {
                                 card.remove();
-                                
-                                // Check if feed is empty now and navigate to show empty state
-                                const feed = document.querySelector('.feed');
-                                if (feed && feed.children.length === 0) {
-                                    // Navigate using SPA to preserve cache
-                                    if (window.spa) {
-                                        spa.navigateTo(`/folder/${folderId}`);
-                                    } else {
-                                        window.location.href = `/folder/${folderId}`;
-                                    }
-                                }
+                                console.log('✅ Card removed');
                                 
                                 // Update folder header count if it exists
+                                const feed = document.querySelector('.feed');
                                 const folderHeader = document.querySelector('.folder-header h2');
                                 if (folderHeader && feed) {
                                     const count = feed.children.length;
