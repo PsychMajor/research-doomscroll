@@ -164,7 +164,7 @@
                 this.currentView = null;
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
-                this.CACHE_VERSION = '12.0'; // Changed folder icon to "Add" text button
+                this.CACHE_VERSION = '14.0'; // Light blue box with blue "Add" text
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -748,6 +748,9 @@
                         ` : ''}
                         <div class="card-actions">
                             <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
                                 <span class="add-text">Add</span>
                             </button>
                             <button class="like-btn" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
@@ -1543,6 +1546,9 @@
                     ` : ''}
                     <div class="card-actions">
                         <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
                             <span class="add-text">Add</span>
                         </button>
                         <button class="like-btn ${likedPapers.has(paper.paperId) ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
@@ -2057,6 +2063,9 @@
                     {% endif %}
                     <div class="card-actions">
                         <button class="add-to-folder-btn" onclick="openFolderSelectModal('{{ paper.paperId }}', event)" title="Add to folder">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
                             <span class="add-text">Add</span>
                         </button>
                         <button class="like-btn" onclick="likePaper('{{ paper.paperId }}', event)" title="Like this paper">
