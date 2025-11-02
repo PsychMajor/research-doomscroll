@@ -1944,6 +1944,9 @@
                     {% endif %}
                     {% endif %}
                     <div class="card-actions">
+                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('{{ paper.paperId }}', event)" title="Add to folder">
+                            <span class="add-to-folder-icon">+</span>
+                        </button>
                         <button class="like-btn" onclick="likePaper('{{ paper.paperId }}', event)" title="Like this paper">
                             <span class="like-text">Like</span>
                         </button>
