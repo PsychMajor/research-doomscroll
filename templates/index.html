@@ -1896,6 +1896,68 @@
                 }
             }
 
+            async function removePaperFromFolder(paperId, folderId) {
+                if (!confirm('Remove this paper from the folder?')) return;
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('folder_id', folderId);
+                    formData.append('paper_id', paperId);
+                    
+                    const response = await fetch('/folders/remove-paper', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        console.log(`✅ Paper ${paperId} removed from folder ${folderId}`);
+                        
+                        // If removing from "likes" folder, also update like button state
+                        if (folderId.toLowerCase() === 'likes') {
+                            likedPapers.delete(paperId);
+                            updateFeedbackStats();
+                            savePageState();
+                            console.log('💔 Also unmarked paper as liked');
+                        }
+                        
+                        // Remove card with animation
+                        const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                        if (card) {
+                            card.style.transition = 'all 0.3s ease';
+                            card.style.opacity = '0';
+                            card.style.transform = 'translateX(-100px)';
+                            
+                            setTimeout(() => {
+                                card.remove();
+                                
+                                // Check if feed is empty now and reload to show empty state
+                                const feed = document.querySelector('.feed');
+                                if (feed && feed.children.length === 0) {
+                                    location.reload();
+                                }
+                                
+                                // Update folder header count if it exists
+                                const folderHeader = document.querySelector('.folder-header h2');
+                                if (folderHeader && feed) {
+                                    const count = feed.children.length;
+                                    folderHeader.textContent = `${count} paper${count !== 1 ? 's' : ''} in this folder`;
+                                }
+                            }, 300);
+                        }
+                        
+                        // Clear caches
+                        spa.viewCache.delete('/folders');
+                        spa.viewCache.delete('/likes');
+                        spa.viewCache.delete(`/folder/${folderId}`);
+                        console.log('🗑️  Cleared folder caches');
+                    }
+                } catch (error) {
+                    console.error('Error removing paper from folder:', error);
+                    alert('Failed to remove paper. Please try again.');
+                }
+            }
+
             // Close modal when clicking outside
             window.onclick = function(event) {
                 const clearModal = document.getElementById('clearModal');
