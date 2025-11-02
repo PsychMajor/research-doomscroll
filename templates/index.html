@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Research Doomscroll</title>
-    <link rel="stylesheet" href="/static/style.css?v=4.0" onload="console.log('✅ CSS v4.0 loaded successfully')" onerror="console.error('❌ CSS v4.0 failed to load')">
+    <link rel="stylesheet" href="/static/style.css?v=6.0" onload="console.log('✅ CSS v6.0 loaded successfully')" onerror="console.error('❌ CSS v6.0 failed to load')">
     <script>
         // Define folder management functions globally (in case they're called from this page)
         window.openAddFolderModal = function() {
@@ -164,7 +164,7 @@
                 this.currentView = null;
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
-                this.CACHE_VERSION = '4.0'; // Increment to clear old caches with button
+                this.CACHE_VERSION = '6.0'; // Increment to clear old caches with button
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -748,7 +748,9 @@
                         ` : ''}
                         <div class="card-actions">
                             <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder">
-                                <span class="add-to-folder-icon">+</span>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
                             </button>
                             <button class="like-btn" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
                                 <span class="like-text">Like</span>
@@ -1543,7 +1545,9 @@
                     ` : ''}
                     <div class="card-actions">
                         <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder">
-                            <span class="add-to-folder-icon">+</span>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
                         </button>
                         <button class="like-btn ${likedPapers.has(paper.paperId) ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
                             <span class="like-text">${likedPapers.has(paper.paperId) ? 'Liked' : 'Like'}</span>
@@ -2057,7 +2061,9 @@
                     {% endif %}
                     <div class="card-actions">
                         <button class="add-to-folder-btn" onclick="openFolderSelectModal('{{ paper.paperId }}', event)" title="Add to folder">
-                            <span class="add-to-folder-icon">+</span>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
                         </button>
                         <button class="like-btn" onclick="likePaper('{{ paper.paperId }}', event)" title="Like this paper">
                             <span class="like-text">Like</span>
