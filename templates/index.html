@@ -153,6 +153,9 @@
         </header>
 
     <script>
+        // ============= UNIFIED CACHE VERSION (Used by all caching systems) =============
+        const APP_CACHE_VERSION = '11.0'; // Folder button matched to Like/Pass button size
+        
         // ============= SPA FRAMEWORK (Twitter-style) =============
         
         /**
@@ -164,7 +167,7 @@
                 this.currentView = null;
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
-                this.CACHE_VERSION = '11.0'; // Folder button matched to Like/Pass button size
+                this.CACHE_VERSION = APP_CACHE_VERSION; // Use unified cache version
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -502,9 +505,13 @@
             console.log('=============================');
         };
 
+        // ============= UNIFIED CACHE VERSION MANAGEMENT =============
+        // Single version for all caching systems (SPA viewCache + sessionStorage)
+        const APP_CACHE_VERSION = '11.0'; // Folder button matched to Like/Pass button size
+        
         // ============= CACHE MANAGEMENT (Session-based like Twitter) =============
         const CACHE_KEY = 'research_doomscroll_cache';
-        const CACHE_VERSION = '1.0';
+        const CACHE_VERSION = APP_CACHE_VERSION; // Use unified version
         const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
         function savePageState() {
@@ -558,10 +565,6 @@
                 const verification = sessionStorage.getItem(CACHE_KEY);
                 console.log('💾 STATE SAVED TO sessionStorage:', verification ? '✅ SUCCESS' : '❌ FAILED');
                 
-                // Also save to history state for back/forward navigation
-                window.history.replaceState(state, '', window.location.href);
-                console.log('💾 STATE SAVED TO history.state:', window.history.state ? '✅ SUCCESS' : '❌ FAILED');
-                
                 console.log('💾 FULL SAVE DETAILS:', {
                     visiblePapers: visiblePapers.length,
                     totalPapers: allPapers.length,
@@ -581,16 +584,9 @@
         function loadPageState() {
             try {
                 console.log('📂 LOAD CALLED - Checking for cached state...');
-                console.log('📂 Checking history.state:', window.history.state);
                 console.log('📂 Checking sessionStorage[' + CACHE_KEY + ']:', sessionStorage.getItem(CACHE_KEY) ? 'EXISTS' : 'NULL');
                 
-                // First check if we're navigating back via history
-                if (window.history.state && window.history.state.version === CACHE_VERSION) {
-                    console.log('📂 LOADING FROM HISTORY STATE (back/forward navigation)');
-                    return window.history.state;
-                }
-                
-                // Otherwise check sessionStorage
+                // Check sessionStorage
                 const cached = sessionStorage.getItem(CACHE_KEY);
                 if (!cached) {
                     console.log('📂 No cache found in sessionStorage');
@@ -850,10 +846,8 @@
         // Handle back/forward navigation (Twitter-style)
         window.addEventListener('popstate', (event) => {
             console.log('🔙 Browser back/forward navigation detected');
-            if (event.state && event.state.version === CACHE_VERSION) {
-                console.log('📂 Restoring from history state...');
-                location.reload(); // Reload to restore from cache
-            }
+            // Reload to restore from sessionStorage cache
+            location.reload();
         });
 
         // Auto-save state periodically (every 30 seconds)
