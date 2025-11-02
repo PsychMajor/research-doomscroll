@@ -728,6 +728,16 @@ async def add_paper_to_folder(
         # Save updated folders
         await database.save_folders(folders, user_id=user_id)
         
+        # If adding to "likes" folder, also record as a like
+        if folder_id.lower() == 'likes':
+            # Save paper metadata for caching
+            await database.save_paper(paper)
+            print(f"   💾 Cached paper metadata for: {paper.get('title', 'Unknown')[:50]}")
+            
+            # Record the like
+            await database.like_paper(paper_id, user_id=user_id)
+            print(f"❤️  Also recorded paper {paper_id} as liked")
+        
         return {"status": "success", "message": "Paper added to folder"}
     except Exception as e:
         print(f"❌ Error adding paper to folder: {e}")
@@ -758,6 +768,11 @@ async def remove_paper_from_folder(
         
         # Save updated folders
         await database.save_folders(folders, user_id=user_id)
+        
+        # If removing from "likes" folder, also unlike it
+        if folder_id.lower() == 'likes':
+            await database.unlike_paper(paper_id, user_id=user_id)
+            print(f"💔 Also unliked paper {paper_id}")
         
         return {"status": "success", "message": "Paper removed from folder"}
     except Exception as e:

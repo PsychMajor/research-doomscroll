@@ -1841,6 +1841,25 @@
                     if (result.status === 'success') {
                         console.log(`✅ Paper ${currentPaperForFolder} added to folder ${folderId}`);
                         
+                        // If adding to "likes" folder, also trigger like action
+                        if (folderId.toLowerCase() === 'likes') {
+                            // Mark paper as liked in the UI
+                            const likeBtn = card.querySelector('.like-btn');
+                            if (likeBtn && !likedPapers.has(currentPaperForFolder)) {
+                                likedPapers.add(currentPaperForFolder);
+                                likeBtn.classList.add('active');
+                                const likeText = likeBtn.querySelector('.like-text');
+                                if (likeText) {
+                                    likeText.textContent = 'Liked!';
+                                }
+                                card.style.opacity = '1';
+                                card.style.transform = 'translateX(0)';
+                                updateFeedbackStats();
+                                savePageState();
+                                console.log('❤️  Also marked paper as liked');
+                            }
+                        }
+                        
                         // Show brief success feedback
                         const btn = card.querySelector('.add-to-folder-btn');
                         const originalHTML = btn.innerHTML;
@@ -1852,8 +1871,10 @@
                             btn.disabled = false;
                         }, 1500);
                         
-                        // Clear folders cache
+                        // Clear folders and likes cache
                         spa.viewCache.delete('/folders');
+                        spa.viewCache.delete('/likes');
+                        console.log('🗑️  Cleared /folders and /likes cache');
                     }
                     
                     closeFolderSelectModal();
