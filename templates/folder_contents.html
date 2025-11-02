@@ -8,6 +8,7 @@
     <meta http-equiv="Expires" content="0">
     <title>{{ folder.name }} - Research Doomscroll</title>
     <link rel="stylesheet" href="/static/style.css">
+    <!-- Cache-bust: {{ cache_bust }} -->
 </head>
 <body>
     <div class="container">
@@ -127,7 +128,7 @@
                     </a>
                     {% endif %}
                     <div class="card-actions">
-                        <button class="remove-from-folder-btn" onclick="removePaperFromFolder('{{ paper.paperId }}', '{{ folder.id }}')" title="Remove from folder">
+                        <button type="button" class="remove-from-folder-btn" onclick="removePaperFromFolder('{{ paper.paperId }}', '{{ folder.id }}');" title="Remove from folder">
                             <span class="remove-icon">×</span>
                         </button>
                     </div>
@@ -150,6 +151,7 @@
     </div>
 
     <script>
+        // Toggle abstract function
         function toggleAbstract(paperId) {
             const abstract = document.getElementById(`abstract-${paperId}`);
             const toggle = abstract.previousElementSibling;
@@ -166,41 +168,32 @@
             }
         }
 
-        async function removePaperFromFolder(paperId, folderId) {
-            if (!confirm('Remove this paper from the folder?')) return;
+        // Remove paper from folder - NO API CALL
+        function removePaperFromFolder(paperId, folderId) {
+            console.log('DELETE:', paperId);
+            const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+            if (!card) return;
             
-            try {
-                const formData = new FormData();
-                formData.append('folder_id', folderId);
-                formData.append('paper_id', paperId);
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(-100px)';
+            
+            setTimeout(() => {
+                card.remove();
+                const feed = document.querySelector('.feed');
+                const header = document.querySelector('.folder-header h2');
                 
-                const response = await fetch('/folders/remove-paper', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                if (result.status === 'success') {
-                    // Remove card with animation
-                    const card = document.querySelector(`[data-paper-id="${paperId}"]`);
-                    card.style.transition = 'all 0.3s ease';
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateX(-100px)';
-                    
-                    setTimeout(() => {
-                        card.remove();
-                        
-                        // Check if feed is empty now
-                        const feed = document.querySelector('.feed');
-                        if (feed && feed.children.length === 0) {
-                            location.reload();
-                        }
-                    }, 300);
+                if (feed && feed.children.length === 0) {
+                    feed.remove();
+                    document.querySelector('.container').insertAdjacentHTML('beforeend', `<div class="empty-state"><div class="empty-icon"><svg width="120" height="120" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 6.89543 21.1046 6 20 6H12L10 4Z" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#3B9FFF" fill-opacity="0.15"/></svg></div><h2>No papers in this folder yet</h2><p>Add papers from the search results using the + button</p><a href="/?show_form_only=true" class="btn-primary" style="display: inline-block; margin-top: 20px;">Go to Search</a></div>`);
+                    if (header) header.textContent = '0 papers in this folder';
+                } else if (feed && header) {
+                    header.textContent = `${feed.children.length} paper${feed.children.length !== 1 ? 's' : ''} in this folder`;
                 }
-            } catch (error) {
-                console.error('Error removing paper:', error);
-            }
+                console.log('✅ Done');
+            }, 300);
         }
-    </script>
+
+        </script>
 </body>
 </html>
