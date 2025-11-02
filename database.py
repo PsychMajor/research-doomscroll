@@ -209,7 +209,12 @@ async def load_profile(user_id: Optional[int] = None) -> Dict:
     if not pool:
         # Use in-memory storage
         if user_id and user_id in MEMORY_PROFILES:
-            return MEMORY_PROFILES[user_id]
+            profile = MEMORY_PROFILES[user_id]
+            print(f"📂 Loaded profile from in-memory storage for user {user_id}")
+            if 'folders' in profile:
+                print(f"   Folders: {[f['name'] for f in profile.get('folders', [])]}")
+            return profile
+        print(f"📂 No profile found in memory for user {user_id}, returning defaults")
         return {"topics": [], "authors": [], "folders": [{"name": "Likes", "id": "likes"}]}
     
     try:
@@ -227,13 +232,19 @@ async def load_profile(user_id: Optional[int] = None) -> Dict:
                 # Ensure default Likes folder exists
                 if not any(f['id'] == 'likes' for f in folders):
                     folders.insert(0, {"name": "Likes", "id": "likes"})
+                print(f"📂 Loaded profile from PostgreSQL database for user {user_id}")
+                print(f"   Folders: {[f['name'] for f in folders]}")
                 return {
                     "topics": json.loads(row['topics']) if row['topics'] else [],
                     "authors": json.loads(row['authors']) if row['authors'] else [],
                     "folders": folders
                 }
+            else:
+                print(f"📂 No profile found in database for user {user_id}, returning defaults")
     except Exception as e:
         print(f"⚠️  Error loading profile: {e}")
+        import traceback
+        traceback.print_exc()
     
     return {"topics": [], "authors": [], "folders": [{"name": "Likes", "id": "likes"}]}
 
@@ -242,22 +253,43 @@ async def save_profile(topics_list: List[str], authors_list: List[str], user_id:
     if not pool:
         # Use in-memory storage
         if user_id:
-            MEMORY_PROFILES[user_id] = {
-                "topics": topics_list,
-                "authors": authors_list
-            }
-            print(f"✅ Profile saved to memory for user {user_id}")
+            if user_id not in MEMORY_PROFILES:
+                MEMORY_PROFILES[user_id] = {"topics": [], "authors": [], "folders": [{"name": "Likes", "id": "likes"}]}
+            MEMORY_PROFILES[user_id]["topics"] = topics_list
+            MEMORY_PROFILES[user_id]["authors"] = authors_list
+            # Preserve existing folders
+            print(f"✅ Profile (topics/authors) saved to in-memory storage for user {user_id}")
         return
     
     try:
         async with pool.acquire() as conn:
-            await conn.execute('''
-                INSERT INTO profiles (user_id, topics, authors)
-                VALUES ($1, $2, $3)
-            ''', user_id, json.dumps(topics_list), json.dumps(authors_list))
-        print("✅ Profile saved to database")
+            # Check if profile exists to preserve folders
+            existing = await conn.fetchrow(
+                'SELECT folders FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                user_id
+            )
+            
+            if existing:
+                # Update ALL rows for this user, preserve folders
+                folders = existing['folders'] if existing['folders'] else json.dumps([{"name": "Likes", "id": "likes"}])
+                await conn.execute('''
+                    UPDATE profiles 
+                    SET topics = $1, authors = $2, folders = $3, updated_at = NOW()
+                    WHERE user_id = $4
+                ''', json.dumps(topics_list), json.dumps(authors_list), folders, user_id)
+                print(f"✅ Profile (topics/authors) updated in PostgreSQL database for user {user_id}")
+                print(f"   Preserved existing folders")
+            else:
+                # Create new profile
+                await conn.execute('''
+                    INSERT INTO profiles (user_id, topics, authors, folders)
+                    VALUES ($1, $2, $3, $4)
+                ''', user_id, json.dumps(topics_list), json.dumps(authors_list), json.dumps([{"name": "Likes", "id": "likes"}]))
+                print(f"✅ New profile created in PostgreSQL database for user {user_id}")
     except Exception as e:
         print(f"⚠️  Error saving profile: {e}")
+        import traceback
+        traceback.print_exc()
 
 async def save_folders(folders_list: List[Dict], user_id: Optional[int] = None):
     """Save user folders to database"""
@@ -267,33 +299,40 @@ async def save_folders(folders_list: List[Dict], user_id: Optional[int] = None):
             if user_id not in MEMORY_PROFILES:
                 MEMORY_PROFILES[user_id] = {"topics": [], "authors": [], "folders": []}
             MEMORY_PROFILES[user_id]["folders"] = folders_list
-            print(f"✅ Folders saved to memory for user {user_id}")
+            print(f"✅ Folders saved to in-memory storage for user {user_id}")
+            print(f"   Current folders: {[f['name'] for f in folders_list]}")
         return
     
     try:
         async with pool.acquire() as conn:
             # Check if profile exists
             profile = await conn.fetchrow(
-                'SELECT id FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                'SELECT id, topics, authors FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
                 user_id
             )
             
             if profile:
-                # Update existing profile
+                # Update ALL rows for this user (not just one)
                 await conn.execute('''
                     UPDATE profiles 
                     SET folders = $1, updated_at = NOW()
                     WHERE user_id = $2
                 ''', json.dumps(folders_list), user_id)
+                print(f"✅ Folders updated in PostgreSQL database for user {user_id}")
+                print(f"   Updated all profile rows for this user")
+                print(f"   Current folders: {[f['name'] for f in folders_list]}")
             else:
                 # Create new profile with folders
                 await conn.execute('''
                     INSERT INTO profiles (user_id, topics, authors, folders)
                     VALUES ($1, $2, $3, $4)
                 ''', user_id, json.dumps([]), json.dumps([]), json.dumps(folders_list))
-            print("✅ Folders saved to database")
+                print(f"✅ New profile created in PostgreSQL database for user {user_id}")
+                print(f"   Current folders: {[f['name'] for f in folders_list]}")
     except Exception as e:
         print(f"⚠️  Error saving folders: {e}")
+        import traceback
+        traceback.print_exc()
 
 # Feedback functions
 async def load_feedback(user_id: Optional[int] = None) -> Dict:

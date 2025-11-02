@@ -28,10 +28,10 @@
             </div>
         </header>
         
-        <!-- Navigation Menu - Separate sticky element -->
+        <!-- Navigation Menu -->
         <nav class="nav-menu">
-            <a href="/" class="nav-item">Search</a>
-            <div class="nav-item-dropdown">
+            <a href="/?show_form_only=true" class="nav-item">Search</a>
+            <div class="nav-item-dropdown active">
                 <a href="/folders" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
                     {% if profile and profile.get('folders') %}

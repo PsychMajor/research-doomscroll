@@ -3,8 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Folders - Research Doomscroll</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script>
+        console.log('📦 [FOLDERS] Script version 2025-11-02T12:00:00Z loaded');
+        console.log('📦 [FOLDERS] document.referrer:', document.referrer);
+        try {
+            const navEntries = performance.getEntriesByType('navigation');
+            if (navEntries && navEntries.length > 0) {
+                console.log('📦 [FOLDERS] Navigation type:', navEntries[0].type);
+            } else if (performance.navigation) {
+                console.log('📦 [FOLDERS] Legacy navigation type:', performance.navigation.type);
+            }
+        } catch (err) {
+            console.warn('⚠️ [FOLDERS] Unable to read navigation entries:', err);
+        }
+        // Define functions in global scope immediately (before page loads)
+        window.openAddFolderModal = function() {
+            console.log('Opening modal...');
+            const modal = document.getElementById('addFolderModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('Modal opened, classes:', modal.classList);
+                // Focus on input field
+                const input = modal.querySelector('input[name="folder_name"]');
+                if (input) {
+                    setTimeout(() => input.focus(), 100);
+                }
+            } else {
+                console.error('Modal element not found!');
+            }
+        };
+
+        window.closeAddFolderModal = function() {
+            console.log('Closing modal...');
+            const modal = document.getElementById('addFolderModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        };
+
+        window.deleteFolder = function(folderId, folderName) {
+            if (confirm(`Are you sure you want to delete the folder "${folderName}"? This cannot be undone.`)) {
+                console.log('Deleting folder:', folderId);
+                
+                // Create a form and submit it
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/folders/delete';
+                
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'folder_id';
+                input.value = folderId;
+                
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        };
+    </script>
     <style>
         body {
             background-color: #15202b;
@@ -42,23 +103,26 @@
             margin-bottom: 30px;
         }
 
+        .folder-card-wrapper {
+            position: relative !important;
+            display: block !important;
+            width: 100% !important;
+        }
+
         .folder-card {
             background-color: #192734 !important;
             border: 2px solid #38444d !important;
             border-radius: 16px !important;
             padding: 30px 24px !important;
             text-align: center !important;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
             cursor: pointer !important;
-            transition: all 0.2s ease !important;
             text-decoration: none !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            min-height: 120px !important;
-        }
-
-        .folder-card:hover {
+            display: block !important;
+            height: 100% !important;
+            min-height: 156px !important;
+            position: relative !important;
+        }        .folder-card:hover {
             background-color: #1d2f3f !important;
             border-color: #1da1f2 !important;
             transform: translateY(-2px) !important;
@@ -67,6 +131,7 @@
 
         .folder-card.add-folder {
             border-style: dashed !important;
+            border-width: 2px !important;
             border-color: #38444d !important;
         }
 
@@ -76,8 +141,12 @@
         }
 
         .folder-icon {
-            font-size: 36px !important;
             margin-bottom: 12px !important;
+            color: #1da1f2 !important;
+        }
+
+        .folder-icon svg {
+            display: block !important;
         }
 
         .folder-name {
@@ -95,9 +164,12 @@
         }
 
         .add-folder-icon {
-            font-size: 48px !important;
-            color: #1da1f2 !important;
             margin-bottom: 8px !important;
+            color: #1da1f2 !important;
+        }
+
+        .add-folder-icon svg {
+            display: block !important;
         }
 
         .add-folder-text {
@@ -105,6 +177,53 @@
             font-size: 16px !important;
             font-weight: 600 !important;
             margin: 0 !important;
+        }
+
+        /* Delete folder button */
+        /* Delete button - positioned absolutely in top-right with maximum specificity */
+        body .folders-page .folders-grid .folder-card-wrapper .delete-folder-btn,
+        body .folders-page .folders-grid .folder-card-wrapper button.delete-folder-btn,
+        .folders-page .folders-grid .folder-card-wrapper button.delete-folder-btn[onclick] {
+            position: absolute !important;
+            top: 8px !important;
+            right: 8px !important;
+            background-color: rgba(21, 32, 43, 0.9) !important;
+            border: 1px solid #38444d !important;
+            cursor: pointer !important;
+            opacity: 0 !important;
+            transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
+            padding: 8px !important;
+            border-radius: 8px !important;
+            z-index: 10 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            color: #8899a6 !important;
+            width: auto !important;
+            height: auto !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        body .folders-page .folders-grid .folder-card-wrapper:hover .delete-folder-btn,
+        body .folders-page .folders-grid .folder-card-wrapper:hover button.delete-folder-btn,
+        .folders-page .folders-grid .folder-card-wrapper:hover button.delete-folder-btn[onclick] {
+            opacity: 1 !important;
+        }
+
+        body .folders-page .folders-grid .delete-folder-btn:hover,
+        body .folders-page .folders-grid button.delete-folder-btn:hover,
+        .folders-page .folders-grid button.delete-folder-btn[onclick]:hover {
+            background-color: rgba(239, 68, 68, 0.2) !important;
+            border-color: #ef4444 !important;
+            transform: scale(1.1) !important;
+            color: #ef4444 !important;
+        }
+
+        body .folders-page .folders-grid .delete-folder-btn svg,
+        body .folders-page .folders-grid button.delete-folder-btn svg {
+            display: block !important;
+            pointer-events: none !important;
         }
 
         /* Modal styles */
@@ -228,7 +347,7 @@
         }
     </style>
 </head>
-<body>
+<body class="folders-page">
     <div class="container">
         <header class="header">
             <div class="header-top">
@@ -252,7 +371,7 @@
         
         <!-- Navigation Menu -->
         <nav class="nav-menu">
-            <a href="/" class="nav-item">Search</a>
+            <a href="/?show_form_only=true" class="nav-item">Search</a>
             <div class="nav-item-dropdown">
                 <a href="/folders" class="nav-item active">Folders</a>
                 <div class="dropdown-menu">
@@ -282,26 +401,53 @@
 
             <div class="folders-grid">
                 <!-- Existing folders -->
-                <a href="/likes" class="folder-card">
-                    <div class="folder-icon">📁</div>
-                    <h3 class="folder-name">Likes</h3>
-                    <p class="folder-count">Your liked papers</p>
-                </a>
+                <div class="folder-card-wrapper">
+                    <a href="/likes" class="folder-card">
+                        <div class="folder-icon">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="folder-name">Likes</h3>
+                        <p class="folder-count">Your liked papers</p>
+                    </a>
+                </div>
 
                 {% for folder in folders %}
                     {% if folder.id != 'likes' %}
-                    <a href="/folder/{{ folder.id }}" class="folder-card">
-                        <div class="folder-icon">📁</div>
-                        <h3 class="folder-name">{{ folder.name }}</h3>
-                        <p class="folder-count">0 papers</p>
-                    </a>
+                    <div class="folder-card-wrapper" style="position: relative !important; display: block !important; width: 100% !important;">
+                        <a href="/folder/{{ folder.id }}" class="folder-card">
+                            <div class="folder-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="folder-name">{{ folder.name }}</h3>
+                            <p class="folder-count">0 papers</p>
+                        </a>
+                        <button class="delete-folder-btn" style="position: absolute !important; top: 8px !important; right: 8px !important; z-index: 10 !important; opacity: 0;" onclick="event.preventDefault(); event.stopPropagation(); deleteFolder('{{ folder.id }}', '{{ folder.name }}');" title="Delete folder">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; pointer-events: none;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                        </button>
+                    </div>
                     {% endif %}
                 {% endfor %}
 
                 <!-- Add new folder button -->
-                <div class="folder-card add-folder" onclick="openAddFolderModal()">
-                    <div class="add-folder-icon">+</div>
-                    <p class="add-folder-text">Add Folder</p>
+                <div class="folder-card-wrapper">
+                    <div class="folder-card add-folder" onclick="openAddFolderModal()">
+                        <div class="add-folder-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </div>
+                        <p class="add-folder-text">Add Folder</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -336,38 +482,288 @@
     </div>
 
     <script>
-        function openAddFolderModal() {
-            console.log('Opening modal...');
+        // Track initialized elements to prevent duplicate listeners (mutable for cache clearing)
+        let initializedElements = new WeakSet();
+
+        // Initialize modal event listeners
+        function initializeModalListeners() {
+            console.log('🔧 [FOLDERS] Initializing modal listeners and hover effects...');
+            console.log('🔧 [FOLDERS] Document ready state:', document.readyState);
+            
             const modal = document.getElementById('addFolderModal');
-            if (modal) {
-                modal.classList.add('active');
-                console.log('Modal opened, classes:', modal.classList);
+            if (modal && !modal.dataset.initialized) {
+                // Close modal on outside click
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeAddFolderModal();
+                    }
+                });
+
+                // Close modal on Escape key
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        closeAddFolderModal();
+                    }
+                });
+                
+                modal.dataset.initialized = 'true';
+                console.log('✅ [FOLDERS] Modal listeners initialized');
+            }
+
+            // Initialize hover effects for folder cards
+            const folderWrappers = document.querySelectorAll('.folder-card-wrapper');
+            console.log(`🔧 [FOLDERS] Found ${folderWrappers.length} folder wrapper(s)`);
+            
+            folderWrappers.forEach((wrapper, index) => {
+                const deleteBtn = wrapper.querySelector('.delete-folder-btn');
+                console.log(`🔧 [FOLDERS] Wrapper ${index}:`, {
+                    hasDeleteBtn: !!deleteBtn,
+                    wrapperDisplay: window.getComputedStyle(wrapper).display,
+                    wrapperPosition: window.getComputedStyle(wrapper).position,
+                    alreadyInitialized: initializedElements.has(wrapper)
+                });
+                
+                if (deleteBtn) {
+                    // Skip if already initialized (prevents duplicate listeners)
+                    if (initializedElements.has(wrapper)) {
+                        console.log(`⏭️ [FOLDERS] Wrapper ${index} already initialized, skipping`);
+                        return;
+                    }
+
+                    // Log initial button state
+                    const initialStyles = window.getComputedStyle(deleteBtn);
+                    console.log(`🔧 [FOLDERS] Delete button ${index} initial state:`, {
+                        position: initialStyles.position,
+                        top: initialStyles.top,
+                        right: initialStyles.right,
+                        opacity: initialStyles.opacity,
+                        display: initialStyles.display,
+                        zIndex: initialStyles.zIndex
+                    });
+                    
+                    // Ensure initial state is hidden
+                    deleteBtn.style.opacity = '0';
+                    console.log(`✅ [FOLDERS] Set delete button ${index} opacity to 0`);
+                    
+                    // Change color when hovering directly over the button
+                    deleteBtn.addEventListener('mouseenter', function() {
+                        console.log(`🖱️ [FOLDERS] Mouse entered delete button ${index}`);
+                        this.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                        this.style.borderColor = '#ef4444';
+                        this.style.color = '#ef4444';
+                        this.style.transform = 'scale(1.1)';
+                    });
+                    deleteBtn.addEventListener('mouseleave', function() {
+                        console.log(`🖱️ [FOLDERS] Mouse left delete button ${index}`);
+                        this.style.backgroundColor = 'rgba(21, 32, 43, 0.9)';
+                        this.style.borderColor = '#38444d';
+                        this.style.color = '#8899a6';
+                        this.style.transform = 'scale(1)';
+                    });
+                    
+                    // Show/hide trash icon when hovering over the entire wrapper
+                    wrapper.addEventListener('mouseenter', function() {
+                        console.log(`🖱️ [FOLDERS] Mouse entered wrapper ${index}, showing delete button`);
+                        console.log(`🖱️ [FOLDERS] Current opacity before show:`, deleteBtn.style.opacity);
+                        deleteBtn.style.opacity = '1';
+                        console.log(`🖱️ [FOLDERS] Set opacity to 1`);
+                    });
+                    wrapper.addEventListener('mouseleave', function() {
+                        console.log(`🖱️ [FOLDERS] Mouse left wrapper ${index}, hiding delete button`);
+                        deleteBtn.style.opacity = '0';
+                        // Reset button styles when leaving wrapper
+                        deleteBtn.style.backgroundColor = 'rgba(21, 32, 43, 0.9)';
+                        deleteBtn.style.borderColor = '#38444d';
+                        deleteBtn.style.color = '#8899a6';
+                        deleteBtn.style.transform = 'scale(1)';
+                        console.log(`🖱️ [FOLDERS] Reset button ${index} styles`);
+                    });
+                    
+                    // Mark as initialized
+                    initializedElements.add(wrapper);
+                    console.log(`✅ [FOLDERS] Hover listeners attached to wrapper ${index}`);
+                }
+            });
+            
+            console.log('✅ [FOLDERS] All hover effects initialized');
+        }
+
+        // Reset trash icon visibility when page becomes visible (handles browser back/forward)
+        function resetTrashIconVisibility() {
+            console.log('🔄 [FOLDERS] Resetting trash icon visibility...');
+            const deleteButtons = document.querySelectorAll('.delete-folder-btn');
+            console.log(`🔄 [FOLDERS] Found ${deleteButtons.length} delete button(s) to reset`);
+            
+            deleteButtons.forEach((btn, index) => {
+                const beforeStyles = window.getComputedStyle(btn);
+                console.log(`🔄 [FOLDERS] Button ${index} before reset:`, {
+                    opacity: beforeStyles.opacity,
+                    position: beforeStyles.position,
+                    top: beforeStyles.top,
+                    right: beforeStyles.right
+                });
+                
+                btn.style.opacity = '0';
+                btn.style.backgroundColor = 'rgba(21, 32, 43, 0.9)';
+                btn.style.borderColor = '#38444d';
+                btn.style.color = '#8899a6';
+                btn.style.transform = 'scale(1)';
+                
+                console.log(`✅ [FOLDERS] Button ${index} reset complete`);
+            });
+            
+            console.log('✅ [FOLDERS] All trash icons reset');
+        }
+
+        // Listen for page visibility changes (when user navigates back)
+        document.addEventListener('visibilitychange', function() {
+            console.log('👁️ [FOLDERS] Visibility changed, hidden:', document.hidden);
+            if (!document.hidden) {
+                resetTrashIconVisibility();
+                console.log('👁️ [FOLDERS] Page became visible, forcing reinitialization');
+                forceInitialization(true);
+            }
+        });
+
+        // Listen for pageshow event (when page is restored from cache)
+        window.addEventListener('pageshow', function(event) {
+            console.log('📄 [FOLDERS] Pageshow event, persisted:', event.persisted);
+            if (event.persisted) {
+                // Page was restored from bfcache
+                console.log('💾 [FOLDERS] Page restored from cache, clearing WeakSet and reinitializing...');
+                // Clear the initialized elements so we can reinitialize everything
+                initializedElements = new WeakSet();
+                resetTrashIconVisibility();
+                // Force complete reinitialization
+                setTimeout(() => {
+                    console.log('🛠️ [FOLDERS] Running forceInitialization after bfcache restore');
+                    forceInitialization(true);
+                }, 100);
             } else {
-                console.error('Modal element not found!');
-            }
-        }
-
-        function closeAddFolderModal() {
-            console.log('Closing modal...');
-            const modal = document.getElementById('addFolderModal');
-            if (modal) {
-                modal.classList.remove('active');
-            }
-        }
-
-        // Close modal on outside click
-        document.getElementById('addFolderModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeAddFolderModal();
+                console.log('📄 [FOLDERS] Fresh page load (not from cache)');
             }
         });
 
-        // Close modal on Escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeAddFolderModal();
+        // Observe changes to the folders grid to reinitialize when content changes
+        function observeFoldersGrid() {
+            const foldersGrid = document.querySelector('.folders-grid');
+            if (!foldersGrid) {
+                console.warn('⚠️ [FOLDERS] Folders grid not found for observation');
+                // Retry after a short delay in case grid isn't rendered yet
+                setTimeout(() => {
+                    console.log('🔄 [FOLDERS] Retrying folders grid observation...');
+                    observeFoldersGrid();
+                }, 100);
+                return;
             }
-        });
+
+            console.log('👀 [FOLDERS] Setting up MutationObserver on folders grid');
+
+            const observer = new MutationObserver((mutations) => {
+                console.log('🔄 [FOLDERS] DOM mutation detected:', mutations.length, 'mutation(s)');
+                
+                mutations.forEach((mutation, idx) => {
+                    console.log(`🔄 [FOLDERS] Mutation ${idx}:`, {
+                        type: mutation.type,
+                        addedNodes: mutation.addedNodes.length,
+                        removedNodes: mutation.removedNodes.length
+                    });
+                });
+                
+                // Check if folder cards were added or removed
+                const hasFolderChanges = mutations.some(mutation => {
+                    return Array.from(mutation.addedNodes).some(node => 
+                        node.classList && (node.classList.contains('folder-card-wrapper') || node.classList.contains('folder-card'))
+                    ) || Array.from(mutation.removedNodes).some(node =>
+                        node.classList && (node.classList.contains('folder-card-wrapper') || node.classList.contains('folder-card'))
+                    );
+                });
+
+                if (hasFolderChanges) {
+                    console.log('📦 [FOLDERS] Folder cards changed, reinitializing hover effects...');
+                    // Small delay to ensure DOM is fully updated
+                    setTimeout(() => {
+                        initializeModalListeners();
+                    }, 50);
+                } else {
+                    console.log('⏭️ [FOLDERS] No folder card changes detected, skipping reinitialization');
+                }
+            });
+
+            observer.observe(foldersGrid, {
+                childList: true,
+                subtree: true
+            });
+
+            console.log('✅ [FOLDERS] MutationObserver active');
+        }
+
+        // Force immediate initialization on page load
+        function forceInitialization(isFromCache = false) {
+            console.log(`🚀 [FOLDERS] Force initialization triggered (${isFromCache ? 'from cache restore' : 'normal load'})`);
+            // Wait for any pending renders
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    console.log(`🎬 [FOLDERS] Executing force initialization after render frames (${isFromCache ? 'cache restore' : 'normal'})`);
+                    
+                    // Force refresh all folder card styles to ensure correct rendering
+                    const allFolderCards = document.querySelectorAll('.folder-card');
+                    console.log(`🎨 [FOLDERS] Force refreshing styles for ${allFolderCards.length} folder cards (fromCache=${isFromCache})`);
+                    
+                    allFolderCards.forEach((card, idx) => {
+                        const icon = card.querySelector('.folder-icon');
+                        const svg = card.querySelector('.folder-icon svg');
+                        
+                        if (icon) {
+                            // Force reapply icon styles
+                            icon.style.marginBottom = '12px';
+                            icon.style.color = '#1da1f2';
+                        }
+                        
+                        if (svg) {
+                            svg.style.display = 'block';
+                        }
+                        
+                        console.log(`🎨 [FOLDERS] Refreshed styles for card ${idx} (fromCache=${isFromCache})`);
+                    });
+                    
+                    initializeModalListeners();
+                });
+            });
+        }
+
+        try {
+            const navEntries = performance.getEntriesByType('navigation');
+            const navType = navEntries && navEntries.length > 0 ? navEntries[0].type : undefined;
+            if (navType === 'back_forward') {
+                console.log('🔙 [FOLDERS] Detected back/forward navigation via PerformanceNavigationTiming');
+                forceInitialization(true);
+            } else if (performance.navigation && performance.navigation.type === performance.navigation.TYPE_BACK_FORWARD) {
+                console.log('🔙 [FOLDERS] Detected back/forward navigation via legacy PerformanceNavigation');
+                forceInitialization(true);
+            } else {
+                console.log('📦 [FOLDERS] Navigation detection result:', navType ?? performance.navigation?.type ?? 'unknown');
+            }
+        } catch (err) {
+            console.warn('⚠️ [FOLDERS] Navigation detection failed:', err);
+        }
+
+        // Initialize immediately if DOM is already loaded, otherwise wait
+        console.log('🚀 [FOLDERS] Script loaded, ready state:', document.readyState);
+        if (document.readyState === 'loading') {
+            console.log('⏳ [FOLDERS] Waiting for DOMContentLoaded...');
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeModalListeners();
+                observeFoldersGrid();
+                forceInitialization(false);
+            });
+        } else {
+            console.log('✅ [FOLDERS] DOM already loaded, initializing now');
+            initializeModalListeners();
+            observeFoldersGrid();
+            // Force another initialization after render to catch any late-rendered elements
+            forceInitialization(false);
+        }
     </script>
 </body>
 </html>

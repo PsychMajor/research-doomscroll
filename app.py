@@ -511,6 +511,18 @@ async def home(request: Request, topics: str = "", authors: str = "", sort_by: s
     papers = []
     if topics_list or authors_list:
         papers = fetch_openalex_papers(topics=topics_list, authors=authors_list, per_page=200, sort_by=sort_by)
+        
+        # Cache all fetched papers to database immediately
+        if papers:
+            print(f"💾 Caching {len(papers)} papers to database...")
+            cached_count = 0
+            for paper in papers:
+                try:
+                    await database.save_paper(paper)
+                    cached_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ Failed to cache paper {paper.get('paperId', 'unknown')}: {e}")
+            print(f"   ✅ Successfully cached {cached_count}/{len(papers)} papers")
     
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -587,12 +599,19 @@ async def get_folders(request: Request):
     profile = await database.load_profile(user_id=user_id)
     folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
     
-    return templates.TemplateResponse("folders.html", {
+    response = templates.TemplateResponse("folders.html", {
         "request": request,
         "user": user,
         "folders": folders,
         "profile": profile
     })
+    
+    # Prevent browser caching to avoid ghost elements with wrong styling
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    return response
 
 @app.post("/folders/add")
 async def add_folder(request: Request, folder_name: str = Form(...)):
@@ -612,6 +631,25 @@ async def add_folder(request: Request, folder_name: str = Form(...)):
     
     # Save updated folders
     await database.save_folders(folders, user_id=user_id)
+    
+    return RedirectResponse(url="/folders", status_code=303)
+
+@app.post("/folders/delete")
+async def delete_folder(request: Request, folder_id: str = Form(...)):
+    """Delete a folder"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    profile = await database.load_profile(user_id=user_id)
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    
+    # Filter out the folder to delete (but keep 'likes')
+    if folder_id != 'likes':
+        folders = [f for f in folders if f['id'] != folder_id]
+        await database.save_folders(folders, user_id=user_id)
+        print(f"🗑️  Deleted folder: {folder_id}")
+    else:
+        print(f"⚠️  Cannot delete 'Likes' folder")
     
     return RedirectResponse(url="/folders", status_code=303)
 
