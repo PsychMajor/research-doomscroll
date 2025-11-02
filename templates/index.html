@@ -224,10 +224,7 @@
                     // Check if we have a cached view
                     const cached = this.viewCache.get(url);
                     
-                    // ALWAYS force reload for /folders to avoid stale cached styling
-                    const shouldForceReload = options.forceReload || url.startsWith('/folders');
-                    
-                    if (cached && !shouldForceReload) {
+                    if (cached && !options.forceReload) {
                         console.log('📂 Restoring from view cache:', url);
                         await this.restoreView(url, cached);
                     } else {
@@ -354,6 +351,31 @@
                     // We're on search page, make sure form is visible
                     searchFormWrapper.classList.remove('hidden');
                     console.log('👁️  Ensured search form is visible');
+                }
+                
+                // Check if we're on the folders page
+                const foldersContainer = document.querySelector('.folders-container');
+                if (foldersContainer) {
+                    console.log('📁 Detected folders page, reinitializing folders...');
+                    // Reinitialize folders page modal and hover effects
+                    if (typeof initializeModalListeners === 'function') {
+                        setTimeout(() => {
+                            initializeModalListeners();
+                            console.log('✅ Folders modals reinitialized');
+                        }, 50);
+                    }
+                    if (typeof observeFoldersGrid === 'function') {
+                        setTimeout(() => {
+                            observeFoldersGrid();
+                            console.log('✅ Folders grid observer reinitialized');
+                        }, 50);
+                    }
+                    if (typeof forceInitialization === 'function') {
+                        setTimeout(() => {
+                            forceInitialization(true);
+                            console.log('✅ Folders forced reinitialization complete');
+                        }, 100);
+                    }
                 }
                 
                 // Update feedback state from current sets
