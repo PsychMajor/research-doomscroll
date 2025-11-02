@@ -70,7 +70,7 @@
         
         <!-- Navigation Menu - Separate sticky element -->
         <nav class="nav-menu">
-            <a href="/?show_form_only=true" class="nav-item active">Search</a>
+            <a href="javascript:void(0)" onclick="toggleSearchForm()" class="nav-item active">Search</a>
             <div class="nav-item-dropdown">
                 <a href="/folders" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
@@ -1274,6 +1274,51 @@
                 }
                 
                 console.log('📝 Search form shown (no auto-search)');
+            }
+            
+            function toggleSearchForm() {
+                const wrapper = document.getElementById('searchFormWrapper');
+                
+                // If wrapper doesn't exist, we're on a different page - navigate to home
+                if (!wrapper) {
+                    console.log('🔙 Navigating to home page');
+                    window.location.href = '/?show_form_only=true';
+                    return;
+                }
+                
+                // Toggle the form visibility
+                if (wrapper.classList.contains('hidden')) {
+                    // Show the form
+                    wrapper.classList.remove('hidden');
+                    
+                    // Get the nav menu height to offset the scroll
+                    const navMenu = document.querySelector('.nav-menu');
+                    const navHeight = navMenu ? navMenu.offsetHeight : 0;
+                    
+                    // Scroll to the form with offset for sticky nav
+                    setTimeout(() => {
+                        const wrapperTop = wrapper.getBoundingClientRect().top + window.pageYOffset;
+                        const offsetPosition = wrapperTop - navHeight;
+                        
+                        window.scrollTo({
+                            top: offsetPosition,
+                            behavior: 'smooth'
+                        });
+                    }, 100);
+                    
+                    console.log('📝 Search form shown');
+                } else {
+                    // Hide the form
+                    wrapper.classList.add('hidden');
+                    
+                    // Scroll to top smoothly
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                    
+                    console.log('📝 Search form hidden');
+                }
             }
             
             // Hide form on page load if there are papers (but not if restored from cache)
