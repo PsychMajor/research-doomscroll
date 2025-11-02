@@ -164,7 +164,7 @@
                 this.currentView = null;
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
-                this.CACHE_VERSION = '10.0'; // Folder icon with plus sign and hover
+                this.CACHE_VERSION = '11.0'; // Folder button matched to Like/Pass button size
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -747,8 +747,8 @@
                         </a>
                         ` : ''}
                         <div class="card-actions">
-                            <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 4px !important; position: relative; cursor: pointer;" onmouseover="this.style.color='#1E90FF'; this.querySelector('svg').setAttribute('stroke', '#1E90FF'); this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3B9FFF'; this.querySelector('svg').setAttribute('stroke', '#3B9FFF'); this.style.transform='scale(1)';">
-                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.2s;">
+                            <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 8px 16px !important; cursor: pointer; transition: all 0.3s ease;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.3s ease;">
                                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                                     <line x1="12" y1="10" x2="12" y2="16" stroke="white" stroke-width="2"></line>
                                     <line x1="9" y1="13" x2="15" y2="13" stroke="white" stroke-width="2"></line>
@@ -1546,8 +1546,8 @@
                         </a>
                     ` : ''}
                     <div class="card-actions">
-                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 4px !important; position: relative; cursor: pointer;" onmouseover="this.style.color='#1E90FF'; this.querySelector('svg').setAttribute('stroke', '#1E90FF'); this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3B9FFF'; this.querySelector('svg').setAttribute('stroke', '#3B9FFF'); this.style.transform='scale(1)';">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.2s;">
+                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 8px 16px !important; cursor: pointer; transition: all 0.3s ease;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.3s ease;">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                                 <line x1="12" y1="10" x2="12" y2="16" stroke="white" stroke-width="2"></line>
                                 <line x1="9" y1="13" x2="15" y2="13" stroke="white" stroke-width="2"></line>
@@ -2064,8 +2064,8 @@
                     {% endif %}
                     {% endif %}
                     <div class="card-actions">
-                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('{{ paper.paperId }}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 4px !important; position: relative; cursor: pointer;" onmouseover="this.style.color='#1E90FF'; this.querySelector('svg').setAttribute('stroke', '#1E90FF'); this.style.transform='scale(1.1)';" onmouseout="this.style.color='#3B9FFF'; this.querySelector('svg').setAttribute('stroke', '#3B9FFF'); this.style.transform='scale(1)';">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.2s;">
+                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('{{ paper.paperId }}', event)" title="Add to folder" style="background: transparent !important; border: none !important; color: #3B9FFF !important; padding: 8px 16px !important; cursor: pointer; transition: all 0.3s ease;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; transition: all 0.3s ease;">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                                 <line x1="12" y1="10" x2="12" y2="16" stroke="white" stroke-width="2"></line>
                                 <line x1="9" y1="13" x2="15" y2="13" stroke="white" stroke-width="2"></line>
