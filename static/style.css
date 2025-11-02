@@ -979,19 +979,20 @@ select.form-input {
 }
 
 .card-actions {
-    display: flex;
+    display: flex !important;
     gap: 8px;
+    align-items: center;
 }
 
 .add-to-folder-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(59, 159, 255, 0.15);
+    background-color: transparent !important;
     border: 2px solid #3B9FFF;
     color: #3B9FFF;
     padding: 8px 16px;
-    border-radius: 8px;
+    border-radius: 20px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
@@ -1000,9 +1001,9 @@ select.form-input {
 }
 
 .add-to-folder-btn:hover {
-    background-color: rgba(59, 159, 255, 0.25);
-    border-color: #1E90FF;
-    color: #1E90FF;
+    background-color: rgba(59, 159, 255, 0.1) !important;
+    border-color: #3B9FFF;
+    color: #3B9FFF;
     transform: scale(1.05);
 }
 

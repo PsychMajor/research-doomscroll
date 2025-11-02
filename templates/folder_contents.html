@@ -15,7 +15,12 @@
             <div class="header-top">
                 <div class="header-title">
                     <h1>Research Doomscroll</h1>
-                    <p class="subtitle">📁 {{ folder.name }}</p>
+                    <p class="subtitle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="M10 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 6.89543 21.1046 6 20 6H12L10 4Z" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#3B9FFF" fill-opacity="0.2"/>
+                        </svg>
+                        {{ folder.name }}
+                    </p>
                 </div>
                 <div class="header-actions">
                     {% if user and user.id != 'anonymous' %}
@@ -132,7 +137,11 @@
         </div>
         {% else %}
         <div class="empty-state">
-            <div class="empty-icon">📂</div>
+            <div class="empty-icon">
+                <svg width="120" height="120" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 6.89543 21.1046 6 20 6H12L10 4Z" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#3B9FFF" fill-opacity="0.15"/>
+                </svg>
+            </div>
             <h2>No papers in this folder yet</h2>
             <p>Add papers from the search results using the + button</p>
             <a href="/?show_form_only=true" class="btn-primary" style="display: inline-block; margin-top: 20px;">Go to Search</a>

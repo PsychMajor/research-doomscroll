@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Research Doomscroll</title>
-    <link rel="stylesheet" href="/static/style.css?v=15.0" onload="console.log('✅ CSS v15.0 loaded successfully')" onerror="console.error('❌ CSS v15.0 failed to load')">
+    <link rel="stylesheet" href="/static/style.css?v=22.0" onload="console.log('✅ CSS v22.0 loaded successfully')" onerror="console.error('❌ CSS v22.0 failed to load')">
     <script>
         // Define folder management functions globally (in case they're called from this page)
         window.openAddFolderModal = function() {
@@ -1750,7 +1750,11 @@
                             const folderBtn = document.createElement('button');
                             folderBtn.className = 'folder-select-btn';
                             folderBtn.innerHTML = `
-                                <span class="folder-select-icon">📁</span>
+                                <span class="folder-select-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M10 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8C22 6.89543 21.1046 6 20 6H12L10 4Z" stroke="#3B9FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#3B9FFF" fill-opacity="0.2"/>
+                                    </svg>
+                                </span>
                                 <span class="folder-select-name">${folder.name}</span>
                             `;
                             folderBtn.onclick = () => addPaperToFolder(folder.id);
