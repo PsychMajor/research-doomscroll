@@ -1961,8 +1961,12 @@
                                 // Check if feed is empty now and navigate to show empty state
                                 const feed = document.querySelector('.feed');
                                 if (feed && feed.children.length === 0) {
-                                    // Navigate using SPA instead of full reload
-                                    window.location.href = `/folder/${folderId}`;
+                                    // Navigate using SPA to preserve cache
+                                    if (window.spa) {
+                                        spa.navigateTo(`/folder/${folderId}`);
+                                    } else {
+                                        window.location.href = `/folder/${folderId}`;
+                                    }
                                 }
                                 
                                 // Update folder header count if it exists
