@@ -983,6 +983,34 @@ select.form-input {
     gap: 8px;
 }
 
+.add-to-folder-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(59, 159, 255, 0.15);
+    border: 2px solid #3B9FFF;
+    color: #3B9FFF;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.add-to-folder-btn:hover {
+    background-color: rgba(59, 159, 255, 0.25);
+    border-color: #1E90FF;
+    color: #1E90FF;
+    transform: scale(1.05);
+}
+
+.add-to-folder-btn:active {
+    transform: scale(0.95);
+}
+
+
 .like-btn, .dislike-btn {
     display: flex;
     align-items: center;
