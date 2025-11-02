@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Research Doomscroll</title>
-    <link rel="stylesheet" href="/static/style.css?v=3.0">
+    <link rel="stylesheet" href="/static/style.css?v=4.0" onload="console.log('✅ CSS v4.0 loaded successfully')" onerror="console.error('❌ CSS v4.0 failed to load')">
     <script>
         // Define folder management functions globally (in case they're called from this page)
         window.openAddFolderModal = function() {
@@ -1052,14 +1052,69 @@
                     if (allCards.length > 0 && cardsWithButtons.length === 0) {
                         console.error('❌ PROBLEM: Cards exist but NO buttons found!');
                     }
+                    
+                    // 🆕 CHECK COMPUTED STYLES
                     cardsWithButtons.forEach((btn, i) => {
                         const card = btn.closest('.paper-card');
                         const cardNum = card?.getAttribute('data-card-number');
-                        if (i < 5 || i >= cardsWithButtons.length - 5) {
-                            console.log(`   Card #${cardNum}: has button ✓`);
+                        const icon = btn.querySelector('.add-to-folder-icon');
+                        
+                        if (i < 3) { // Check first 3 buttons in detail
+                            const btnStyles = window.getComputedStyle(btn);
+                            const iconStyles = icon ? window.getComputedStyle(icon) : null;
+                            
+                            console.log(`🔬 Button #${cardNum} computed styles:`);
+                            console.log('   Button font-size:', btnStyles.fontSize);
+                            console.log('   Button font-weight:', btnStyles.fontWeight);
+                            console.log('   Button color:', btnStyles.color);
+                            console.log('   Button background:', btnStyles.background);
+                            console.log('   Button backgroundColor:', btnStyles.backgroundColor);
+                            console.log('   Button width:', btnStyles.width);
+                            console.log('   Button height:', btnStyles.height);
+                            console.log('   Button display:', btnStyles.display);
+                            
+                            if (iconStyles) {
+                                console.log('   Icon font-size:', iconStyles.fontSize);
+                                console.log('   Icon font-weight:', iconStyles.fontWeight);
+                                console.log('   Icon color:', iconStyles.color);
+                            }
                         }
                     });
                 }, 100);
+                
+                // 🆕 CHECK CSS FILE VERSION
+                setTimeout(() => {
+                    const cssLink = document.querySelector('link[href*="style.css"]');
+                    if (cssLink) {
+                        console.log('📝 CSS Link href:', cssLink.href);
+                        console.log('📝 CSS Link loaded:', cssLink.sheet !== null);
+                        if (cssLink.sheet) {
+                            console.log('📝 CSS Rules count:', cssLink.sheet.cssRules?.length || 0);
+                            
+                            // Try to find the add-to-folder-btn rule
+                            const rules = Array.from(cssLink.sheet.cssRules || []);
+                            const btnRule = rules.find(r => r.selectorText?.includes('add-to-folder-btn'));
+                            const iconRule = rules.find(r => r.selectorText?.includes('add-to-folder-icon'));
+                            
+                            if (btnRule) {
+                                console.log('✅ Found .add-to-folder-btn CSS rule');
+                                console.log('   Rule font-size:', btnRule.style.fontSize);
+                                console.log('   Rule font-weight:', btnRule.style.fontWeight);
+                                console.log('   Rule background:', btnRule.style.background);
+                            } else {
+                                console.error('❌ Could not find .add-to-folder-btn CSS rule!');
+                            }
+                            
+                            if (iconRule) {
+                                console.log('✅ Found .add-to-folder-icon CSS rule');
+                                console.log('   Rule font-size:', iconRule.style.fontSize);
+                                console.log('   Rule font-weight:', iconRule.style.fontWeight);
+                            } else {
+                                console.error('❌ Could not find .add-to-folder-icon CSS rule!');
+                            }
+                        }
+                    }
+                }, 200);
                 
                 // Initialize the view
                 initializeView();
