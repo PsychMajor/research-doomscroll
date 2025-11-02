@@ -11,4 +11,3 @@ requests
 sumy
 nltk
 numpy
-re
