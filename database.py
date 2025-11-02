@@ -106,23 +106,65 @@ async def init_db():
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_paper_id ON feedback(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_key ON paper_cache(cache_key, source)')
             
-            # Migration: Add user_id column to existing tables if it doesn't exist
+            # Migration: Add columns if they don't exist
             try:
-                await conn.execute('''
-                    ALTER TABLE profiles 
-                    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
-                ''')
-                await conn.execute('''
-                    ALTER TABLE feedback 
-                    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
-                ''')
-                await conn.execute('''
-                    ALTER TABLE profiles 
-                    ADD COLUMN IF NOT EXISTS folders JSONB DEFAULT '[]'::jsonb
-                ''')
-                print("✅ Migration: user_id and folders columns added/verified")
+                # Check and add user_id to profiles
+                user_id_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='profiles' AND column_name='user_id'
+                    )
+                """)
+                if not user_id_exists:
+                    await conn.execute('''
+                        ALTER TABLE profiles 
+                        ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+                    ''')
+                    print("✅ Added user_id column to profiles")
+                
+                # Check and add user_id to feedback
+                feedback_user_id_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='feedback' AND column_name='user_id'
+                    )
+                """)
+                if not feedback_user_id_exists:
+                    await conn.execute('''
+                        ALTER TABLE feedback 
+                        ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+                    ''')
+                    print("✅ Added user_id column to feedback")
+                
+                # Check and add folders to profiles
+                folders_exists = await conn.fetchval("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='profiles' AND column_name='folders'
+                    )
+                """)
+                if not folders_exists:
+                    await conn.execute('''
+                        ALTER TABLE profiles 
+                        ADD COLUMN folders JSONB DEFAULT '[]'::jsonb
+                    ''')
+                    print("✅ Added folders column to profiles")
+                    
+                    # Update existing rows to have default Likes folder
+                    await conn.execute("""
+                        UPDATE profiles 
+                        SET folders = '[{"name": "Likes", "id": "likes"}]'::jsonb
+                        WHERE folders IS NULL OR folders::text = '[]'
+                    """)
+                    print("✅ Initialized folders with default Likes folder")
+                else:
+                    print("✅ Folders column already exists")
+                
+                print("✅ Database migrations completed")
             except Exception as migration_error:
-                print(f"⚠️  Migration warning: {migration_error}")
+                print(f"⚠️  Migration error: {migration_error}")
+                import traceback
+                traceback.print_exc()
             
         print("✅ Database initialized successfully")
     except Exception as e:
