@@ -150,6 +150,22 @@
     </div>
 
     <script>
+        // Update Search nav link from sessionStorage
+        const lastSearchUrl = sessionStorage.getItem('lastSearchUrl');
+        if (lastSearchUrl) {
+            const searchNavLink = document.querySelector('.nav-menu a[href="/"]');
+            if (searchNavLink) {
+                searchNavLink.setAttribute('href', lastSearchUrl);
+                console.log('🔗 Updated Search link to:', lastSearchUrl);
+            }
+            // Also update the "Go to Search" button in empty state if it exists
+            const goToSearchBtn = document.querySelector('.empty-state a[href="/"]');
+            if (goToSearchBtn) {
+                goToSearchBtn.setAttribute('href', lastSearchUrl);
+                console.log('🔗 Updated Go to Search button to:', lastSearchUrl);
+            }
+        }
+        
         function toggleAbstract(paperId) {
             const abstract = document.getElementById(`abstract-${paperId}`);
             const toggle = abstract.previousElementSibling;

@@ -190,7 +190,16 @@
                 const currentUrl = window.location.pathname + window.location.search;
                 if (currentUrl.includes('topics=') || currentUrl.includes('authors=')) {
                     this.lastSearchUrl = currentUrl;
+                    sessionStorage.setItem('lastSearchUrl', currentUrl);
                     console.log('📍 Initial search URL:', currentUrl);
+                } else {
+                    // Try to restore from sessionStorage
+                    const savedUrl = sessionStorage.getItem('lastSearchUrl');
+                    if (savedUrl) {
+                        this.lastSearchUrl = savedUrl;
+                        console.log('📍 Restored search URL from storage:', savedUrl);
+                        this.updateSearchNavLink();
+                    }
                 }
                 
                 // Intercept all navigation
@@ -279,6 +288,8 @@
                 // Track if this is a search results page
                 if (url.includes('topics=') || url.includes('authors=')) {
                     this.lastSearchUrl = url;
+                    // Save to sessionStorage so it persists across page loads
+                    sessionStorage.setItem('lastSearchUrl', url);
                     console.log('📍 Saved last search URL:', url);
                     // Update the Search nav link to point to this URL
                     this.updateSearchNavLink();
