@@ -132,7 +132,7 @@
                                 </svg>
                             </div>
                             <h3 class="folder-name">{{ folder.name }}</h3>
-                            <p class="folder-count">0 papers</p>
+                            <p class="folder-count">{{ folder.papers|length if folder.papers else 0 }} paper{{ 's' if (folder.papers|length if folder.papers else 0) != 1 else '' }}</p>
                         </a>
                         <button class="delete-folder-btn" style="position: absolute !important; top: 8px !important; right: 8px !important; z-index: 10 !important; opacity: 0;" onclick="event.preventDefault(); event.stopPropagation(); deleteFolder('{{ folder.id }}', '{{ folder.name }}');" title="Delete folder">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; pointer-events: none;">

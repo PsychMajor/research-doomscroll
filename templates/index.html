@@ -1430,6 +1430,9 @@
                         </a>
                     ` : ''}
                     <div class="card-actions">
+                        <button class="add-to-folder-btn" onclick="openFolderSelectModal('${paper.paperId}', event)" title="Add to folder">
+                            <span class="add-to-folder-icon">+</span>
+                        </button>
                         <button class="like-btn ${likedPapers.has(paper.paperId) ? 'active' : ''}" onclick="likePaper('${paper.paperId}', event)" title="Like this paper">
                             <span class="like-text">${likedPapers.has(paper.paperId) ? 'Liked' : 'Like'}</span>
                         </button>
@@ -1609,11 +1612,105 @@
                 document.getElementById('clearModal').style.display = 'none';
             }
 
+            // Folder selection modal functions
+            let currentPaperForFolder = null;
+
+            async function openFolderSelectModal(paperId, event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                currentPaperForFolder = paperId;
+                
+                // Fetch user's folders
+                try {
+                    const response = await fetch('/profile');
+                    const profile = await response.json();
+                    const folders = profile.folders || [];
+                    
+                    // Populate folder list
+                    const folderList = document.getElementById('folderList');
+                    folderList.innerHTML = '';
+                    
+                    if (folders.length === 0) {
+                        folderList.innerHTML = '<p style="color: #8899a6; text-align: center;">No folders yet. Create one from the Folders page!</p>';
+                    } else {
+                        folders.forEach(folder => {
+                            const folderBtn = document.createElement('button');
+                            folderBtn.className = 'folder-select-btn';
+                            folderBtn.innerHTML = `
+                                <span class="folder-select-icon">📁</span>
+                                <span class="folder-select-name">${folder.name}</span>
+                            `;
+                            folderBtn.onclick = () => addPaperToFolder(folder.id);
+                            folderList.appendChild(folderBtn);
+                        });
+                    }
+                    
+                    // Show modal
+                    document.getElementById('folderSelectModal').style.display = 'flex';
+                } catch (error) {
+                    console.error('Error loading folders:', error);
+                }
+            }
+
+            function closeFolderSelectModal() {
+                document.getElementById('folderSelectModal').style.display = 'none';
+                currentPaperForFolder = null;
+            }
+
+            async function addPaperToFolder(folderId) {
+                if (!currentPaperForFolder) return;
+                
+                try {
+                    // Get paper data from card
+                    const card = document.querySelector(`[data-paper-id="${currentPaperForFolder}"]`);
+                    const paperJson = card.getAttribute('data-paper-json');
+                    
+                    const formData = new FormData();
+                    formData.append('folder_id', folderId);
+                    formData.append('paper_id', currentPaperForFolder);
+                    formData.append('paper_data', paperJson);
+                    
+                    const response = await fetch('/folders/add-paper', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        console.log(`✅ Paper ${currentPaperForFolder} added to folder ${folderId}`);
+                        
+                        // Show brief success feedback
+                        const btn = card.querySelector('.add-to-folder-btn');
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<span style="color: #22c55e;">✓</span>';
+                        btn.disabled = true;
+                        
+                        setTimeout(() => {
+                            btn.innerHTML = originalHTML;
+                            btn.disabled = false;
+                        }, 1500);
+                        
+                        // Clear folders cache
+                        spa.viewCache.delete('/folders');
+                    }
+                    
+                    closeFolderSelectModal();
+                } catch (error) {
+                    console.error('Error adding paper to folder:', error);
+                }
+            }
+
             // Close modal when clicking outside
             window.onclick = function(event) {
-                const modal = document.getElementById('clearModal');
-                if (event.target === modal) {
+                const clearModal = document.getElementById('clearModal');
+                const folderModal = document.getElementById('folderSelectModal');
+                
+                if (event.target === clearModal) {
                     closeClearModal();
+                }
+                if (event.target === folderModal) {
+                    closeFolderSelectModal();
                 }
             }
 
@@ -1911,6 +2008,22 @@
                     </form>
                 </div>
                 <button onclick="closeClearModal()" class="modal-btn cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folder Select Modal -->
+    <div id="folderSelectModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add to Folder</h3>
+                <button class="modal-close" onclick="closeFolderSelectModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Select a folder for this paper:</p>
+                <div id="folderList" class="folder-select-list">
+                    <!-- Folders will be loaded dynamically -->
+                </div>
             </div>
         </div>
     </div>

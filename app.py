@@ -597,7 +597,7 @@ async def get_folders(request: Request):
     
     # Load user's folders from database
     profile = await database.load_profile(user_id=user_id)
-    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
     
     response = templates.TemplateResponse("folders.html", {
         "request": request,
@@ -613,6 +613,43 @@ async def get_folders(request: Request):
     
     return response
 
+@app.get("/folder/{folder_id}", response_class=HTMLResponse)
+async def get_folder_contents(request: Request, folder_id: str):
+    """Display papers within a specific folder"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    # Load user's folders from database
+    profile = await database.load_profile(user_id=user_id)
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
+    
+    # Find the requested folder
+    folder = None
+    for f in folders:
+        if f['id'] == folder_id:
+            folder = f
+            break
+    
+    if not folder:
+        return RedirectResponse(url="/folders", status_code=303)
+    
+    # Get papers in this folder
+    papers = folder.get('papers', [])
+    
+    response = templates.TemplateResponse("folder_contents.html", {
+        "request": request,
+        "user": user,
+        "folder": folder,
+        "papers": papers,
+        "profile": profile
+    })
+    
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    return response
+
 @app.post("/folders/add")
 async def add_folder(request: Request, folder_name: str = Form(...)):
     """Add a new folder"""
@@ -620,12 +657,13 @@ async def add_folder(request: Request, folder_name: str = Form(...)):
     user_id = user['id']
     
     profile = await database.load_profile(user_id=user_id)
-    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
     
     # Create new folder with unique ID
     new_folder = {
         'name': folder_name,
-        'id': folder_name.lower().replace(' ', '_')
+        'id': folder_name.lower().replace(' ', '_'),
+        'papers': []
     }
     folders.append(new_folder)
     
@@ -641,7 +679,7 @@ async def delete_folder(request: Request, folder_id: str = Form(...)):
     user_id = user['id']
     
     profile = await database.load_profile(user_id=user_id)
-    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
     
     # Filter out the folder to delete (but keep 'likes')
     if folder_id != 'likes':
@@ -652,6 +690,79 @@ async def delete_folder(request: Request, folder_id: str = Form(...)):
         print(f"⚠️  Cannot delete 'Likes' folder")
     
     return RedirectResponse(url="/folders", status_code=303)
+
+@app.post("/folders/add-paper")
+async def add_paper_to_folder(
+    request: Request, 
+    folder_id: str = Form(...), 
+    paper_id: str = Form(...),
+    paper_data: str = Form(...)
+):
+    """Add a paper to a folder"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    try:
+        # Parse paper data
+        paper = json.loads(paper_data)
+        
+        # Load user's folders
+        profile = await database.load_profile(user_id=user_id)
+        folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
+        
+        # Find the target folder and add paper if not already present
+        for folder in folders:
+            if folder['id'] == folder_id:
+                # Ensure papers array exists
+                if 'papers' not in folder:
+                    folder['papers'] = []
+                
+                # Check if paper already exists in folder
+                if not any(p.get('paperId') == paper_id for p in folder['papers']):
+                    folder['papers'].append(paper)
+                    print(f"📁 Added paper {paper_id} to folder {folder_id}")
+                else:
+                    print(f"ℹ️  Paper {paper_id} already in folder {folder_id}")
+                break
+        
+        # Save updated folders
+        await database.save_folders(folders, user_id=user_id)
+        
+        return {"status": "success", "message": "Paper added to folder"}
+    except Exception as e:
+        print(f"❌ Error adding paper to folder: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/folders/remove-paper")
+async def remove_paper_from_folder(
+    request: Request,
+    folder_id: str = Form(...),
+    paper_id: str = Form(...)
+):
+    """Remove a paper from a folder"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    try:
+        # Load user's folders
+        profile = await database.load_profile(user_id=user_id)
+        folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes', 'papers': []}])
+        
+        # Find the target folder and remove paper
+        for folder in folders:
+            if folder['id'] == folder_id:
+                if 'papers' in folder:
+                    folder['papers'] = [p for p in folder['papers'] if p.get('paperId') != paper_id]
+                    print(f"🗑️  Removed paper {paper_id} from folder {folder_id}")
+                break
+        
+        # Save updated folders
+        await database.save_folders(folders, user_id=user_id)
+        
+        return {"status": "success", "message": "Paper removed from folder"}
+    except Exception as e:
+        print(f"❌ Error removing paper from folder: {e}")
+        return {"status": "error", "message": str(e)}
 
 # ============================================================================
 # PROFILE ROUTES

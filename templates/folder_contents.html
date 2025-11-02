@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>{{ folder.name }} - Research Doomscroll</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>Research Doomscroll</h1>
+                    <p class="subtitle">📁 {{ folder.name }}</p>
+                </div>
+                <div class="header-actions">
+                    {% if user and user.id != 'anonymous' %}
+                        <div class="user-info">
+                            <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
+                            <span class="user-name">Welcome {{ user.name.split()[0] if user.name else user.email.split('@')[0] }}</span>
+                            <a href="/logout" class="btn-logout">Logout</a>
+                        </div>
+                    {% else %}
+                        <a href="/login" class="btn-login">Sign in with Google</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+        
+        <!-- Navigation Menu -->
+        <nav class="nav-menu">
+            <a href="/?show_form_only=true" class="nav-item">Search</a>
+            <div class="nav-item-dropdown active">
+                <a href="/folders" class="nav-item">Folders</a>
+                <div class="dropdown-menu">
+                    {% if profile and profile.get('folders') %}
+                        {% for f in profile.get('folders', []) %}
+                            {% if f.id == folder.id %}
+                                <a href="/folder/{{ f.id }}" class="dropdown-item active">{{ f.name }}</a>
+                            {% elif f.id == 'likes' %}
+                                <a href="/likes" class="dropdown-item">{{ f.name }}</a>
+                            {% else %}
+                                <a href="/folder/{{ f.id }}" class="dropdown-item">{{ f.name }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <a href="/likes" class="dropdown-item">Likes</a>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="#Following" class="nav-item">Following</a>
+            <a href="#Recommended" class="nav-item">Recommended</a>
+            <a href="#Contact" class="nav-item">Contact</a>
+        </nav>
+
+        <div class="folder-header">
+            <h2>{{ papers|length }} paper{{ 's' if papers|length != 1 else '' }} in this folder</h2>
+        </div>
+        
+        {% if papers %}
+        <div class="feed">
+            {% for paper in papers %}
+            <article class="paper-card" data-card-number="{{ loop.index }}" data-paper-id="{{ paper.paperId }}" data-paper-json='{{ paper|tojson }}'>
+                <div class="card-header">
+                    <div class="paper-meta">
+                        <h2 class="paper-title">{{ paper.title | safe }}</h2>
+                        <div class="paper-info">
+                            {% if paper.authors %}
+                            <span class="authors">
+                                {% if paper.authors|length <= 4 %}
+                                    {% for author in paper.authors %}
+                                        {{ author.name if author.name else author }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {{ paper.authors[0].name if paper.authors[0].name else paper.authors[0] }}, {{ paper.authors[1].name if paper.authors[1].name else paper.authors[1] }}, ... {{ paper.authors[-2].name if paper.authors[-2].name else paper.authors[-2] }}, {{ paper.authors[-1].name if paper.authors[-1].name else paper.authors[-1] }}
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            <span class="separator">•</span>
+                            <span class="year">{{ paper.year }}</span>
+                            {% if paper.venue %}
+                            <span class="separator">•</span>
+                            <span class="venue">{{ paper.venue }}</span>
+                            {% endif %}
+                            {% if paper.citationCount and paper.citationCount > 0 %}
+                            <span class="separator">•</span>
+                            <span class="citations">{{ paper.citationCount }} citations</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if paper.tldr %}
+                <div class="paper-tldr">
+                    <strong>TL;DR:</strong> {{ paper.tldr | safe }}
+                </div>
+                {% endif %}
+
+                <div class="paper-abstract-container">
+                    <button class="abstract-toggle" onclick="toggleAbstract('{{ paper.paperId }}')">
+                        <span class="toggle-icon">▶</span>
+                        <span class="toggle-text">Abstract</span>
+                    </button>
+                    <div class="paper-abstract" id="abstract-{{ paper.paperId }}" style="display: none;">
+                        {% if paper.abstract %}
+                            {{ paper.abstract | safe }}
+                        {% else %}
+                            <em class="no-abstract">No abstract available</em>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    {% if paper.url %}
+                    <a href="{{ paper.url }}" class="paper-link" target="_blank" rel="noopener noreferrer">
+                        <span>Read on {{ 'bioRxiv' if paper.source == 'bioRxiv' else "publisher's page" if paper.source == 'OpenAlex' else 'Semantic Scholar' }}</span>
+                        <span class="link-icon">↗</span>
+                    </a>
+                    {% endif %}
+                    <div class="card-actions">
+                        <button class="remove-from-folder-btn" onclick="removePaperFromFolder('{{ paper.paperId }}', '{{ folder.id }}')" title="Remove from folder">
+                            <span class="remove-icon">×</span>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📂</div>
+            <h2>No papers in this folder yet</h2>
+            <p>Add papers from the search results using the + button</p>
+            <a href="/?show_form_only=true" class="btn-primary" style="display: inline-block; margin-top: 20px;">Go to Search</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleAbstract(paperId) {
+            const abstract = document.getElementById(`abstract-${paperId}`);
+            const toggle = abstract.previousElementSibling;
+            const icon = toggle.querySelector('.toggle-icon');
+            
+            if (abstract.style.display === 'none') {
+                abstract.style.display = 'block';
+                icon.textContent = '▼';
+                toggle.classList.add('expanded');
+            } else {
+                abstract.style.display = 'none';
+                icon.textContent = '▶';
+                toggle.classList.remove('expanded');
+            }
+        }
+
+        async function removePaperFromFolder(paperId, folderId) {
+            if (!confirm('Remove this paper from the folder?')) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('folder_id', folderId);
+                formData.append('paper_id', paperId);
+                
+                const response = await fetch('/folders/remove-paper', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // Remove card with animation
+                    const card = document.querySelector(`[data-paper-id="${paperId}"]`);
+                    card.style.transition = 'all 0.3s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(-100px)';
+                    
+                    setTimeout(() => {
+                        card.remove();
+                        
+                        // Check if feed is empty now
+                        const feed = document.querySelector('.feed');
+                        if (feed && feed.children.length === 0) {
+                            location.reload();
+                        }
+                    }, 300);
+                }
+            } catch (error) {
+                console.error('Error removing paper:', error);
+            }
+        }
+    </script>
+</body>
+</html>
