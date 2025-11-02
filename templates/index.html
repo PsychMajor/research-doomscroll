@@ -291,8 +291,25 @@
                 
                 const container = document.querySelector('.container');
                 if (container) {
+                    // DIAGNOSTIC: Check cache content before restoring
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = cached.html;
+                    const buttonsInCache = tempDiv.querySelectorAll('.add-to-folder-btn');
+                    console.log('🔍 CACHE RESTORE DIAGNOSTIC:');
+                    console.log('   Buttons in cached HTML:', buttonsInCache.length);
+                    
                     // Restore HTML
                     container.innerHTML = cached.html;
+                    
+                    // DIAGNOSTIC: Check DOM after restoring
+                    const buttonsInDOM = container.querySelectorAll('.add-to-folder-btn');
+                    const cardsInDOM = container.querySelectorAll('.paper-card');
+                    console.log('   Cards in DOM after restore:', cardsInDOM.length);
+                    console.log('   Buttons in DOM after restore:', buttonsInDOM.length);
+                    
+                    if (cardsInDOM.length > 0 && buttonsInDOM.length === 0) {
+                        console.error('❌ PROBLEM: Cache restored cards but NO buttons!');
+                    }
                     
                     // Restore scroll position
                     requestAnimationFrame(() => {
@@ -1022,6 +1039,25 @@
                 window._serverPapers = serverPapers;
                 console.log('🔧 SERVER PAPERS:', serverPapers ? serverPapers.length : 0, 'papers received');
                 
+                // DIAGNOSTIC: Check buttons on initial load
+                setTimeout(() => {
+                    const allCards = document.querySelectorAll('.paper-card');
+                    const cardsWithButtons = document.querySelectorAll('.paper-card .add-to-folder-btn');
+                    console.log('🔍 INITIAL LOAD DIAGNOSTIC:');
+                    console.log('   Total cards:', allCards.length);
+                    console.log('   Cards with + button:', cardsWithButtons.length);
+                    if (allCards.length > 0 && cardsWithButtons.length === 0) {
+                        console.error('❌ PROBLEM: Cards exist but NO buttons found!');
+                    }
+                    cardsWithButtons.forEach((btn, i) => {
+                        const card = btn.closest('.paper-card');
+                        const cardNum = card?.getAttribute('data-card-number');
+                        if (i < 5 || i >= cardsWithButtons.length - 5) {
+                            console.log(`   Card #${cardNum}: has button ✓`);
+                        }
+                    });
+                }, 100);
+                
                 // Initialize the view
                 initializeView();
                 
@@ -1036,6 +1072,10 @@
                             timestamp: Date.now()
                         });
                         console.log('💾 Initial page cached:', url);
+                        
+                        // DIAGNOSTIC: Check what's being cached
+                        const cachedButtons = container.querySelectorAll('.add-to-folder-btn');
+                        console.log('💾 CACHE DIAGNOSTIC: Caching', cachedButtons.length, 'buttons');
                     }
                 }, 500); // Wait for view to fully initialize
 
