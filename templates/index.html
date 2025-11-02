@@ -351,13 +351,6 @@
                     // We're on search page, make sure form is visible
                     searchFormWrapper.classList.remove('hidden');
                     console.log('👁️  Ensured search form is visible');
-                    
-                    // Ensure add-to-folder buttons exist on all paper cards
-                    if (typeof ensureAddToFolderButtons === 'function') {
-                        setTimeout(() => {
-                            ensureAddToFolderButtons();
-                        }, 50);
-                    }
                 }
                 
                 // Check if we're on the folders page
@@ -977,46 +970,6 @@
         }
         
         // ============= ENSURE ADD-TO-FOLDER BUTTONS EXIST =============
-        function ensureAddToFolderButtons() {
-            console.log('🔧 Ensuring add-to-folder buttons exist on all cards...');
-            let addedCount = 0;
-            
-            document.querySelectorAll('.paper-card').forEach(card => {
-                const cardActions = card.querySelector('.card-actions');
-                if (!cardActions) return;
-                
-                // Check if button already exists
-                const existingBtn = cardActions.querySelector('.add-to-folder-btn');
-                if (existingBtn) return;
-                
-                // Get paper ID from card
-                const paperId = card.dataset.paperId;
-                if (!paperId) return;
-                
-                // Create the button
-                const btn = document.createElement('button');
-                btn.className = 'add-to-folder-btn';
-                btn.title = 'Add to folder';
-                btn.onclick = (e) => openFolderSelectModal(paperId, e);
-                
-                const icon = document.createElement('span');
-                icon.className = 'add-to-folder-icon';
-                icon.textContent = '+';
-                
-                btn.appendChild(icon);
-                
-                // Insert as first child in card-actions
-                cardActions.insertBefore(btn, cardActions.firstChild);
-                addedCount++;
-            });
-            
-            if (addedCount > 0) {
-                console.log(`✅ Added ${addedCount} missing add-to-folder buttons`);
-            } else {
-                console.log('✅ All add-to-folder buttons already present');
-            }
-        }
-        
         // ============= FEEDBACK STATE MARKING =============
         function markFeedbackStates() {
             console.log(`🎯 Marking feedback states: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
