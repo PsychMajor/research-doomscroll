@@ -38,7 +38,7 @@
         
         <!-- Navigation Menu -->
         <nav class="nav-menu">
-            <a href="/?show_form_only=true" class="nav-item">Search</a>
+            <a href="/" class="nav-item">Search</a>
             <div class="nav-item-dropdown active">
                 <a href="/folders" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
@@ -144,7 +144,7 @@
             </div>
             <h2>No papers in this folder yet</h2>
             <p>Add papers from the search results using the + button</p>
-            <a href="/?show_form_only=true" class="btn-primary" style="display: inline-block; margin-top: 20px;">Go to Search</a>
+            <a href="/" class="btn-primary" style="display: inline-block; margin-top: 20px;">Go to Search</a>
         </div>
         {% endif %}
     </div>
@@ -193,7 +193,19 @@
                         // Check if feed is empty now
                         const feed = document.querySelector('.feed');
                         if (feed && feed.children.length === 0) {
-                            location.reload();
+                            // Use SPA navigation if available, otherwise full reload
+                            if (window.spa) {
+                                window.spa.navigateTo('/folder/{{ folder.id }}');
+                            } else {
+                                window.location.href = '/folder/{{ folder.id }}';
+                            }
+                        }
+                        
+                        // Update folder header count if it exists
+                        const folderHeader = document.querySelector('.folder-header h2');
+                        if (folderHeader && feed) {
+                            const count = feed.children.length;
+                            folderHeader.textContent = `${count} paper${count !== 1 ? 's' : ''} in this folder`;
                         }
                     }, 300);
                 }
