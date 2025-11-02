@@ -1948,3 +1948,281 @@ select.form-input {
     }
 }
 
+
+/* ============================================================================
+   FOLDERS PAGE STYLES
+   ============================================================================ */
+
+.folders-container {
+    padding: 40px 20px;
+    max-width: 1200px !important;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.folders-header {
+    margin-bottom: 40px;
+}
+
+.folders-header h1 {
+    color: #ffffff;
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.folders-header p {
+    color: #8899a6;
+    font-size: 16px;
+}
+
+.folders-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    gap: 20px !important;
+    margin-bottom: 30px;
+}
+
+.folder-card-wrapper {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+}
+
+.folder-card {
+    background-color: #192734 !important;
+    border: 2px solid #38444d !important;
+    border-radius: 16px !important;
+    padding: 30px 24px !important;
+    text-align: center !important;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    display: block !important;
+    height: 100% !important;
+    min-height: 156px !important;
+    position: relative !important;
+}
+
+.folder-card:hover {
+    background-color: #1d2f3f !important;
+    border-color: #1da1f2 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(29, 161, 242, 0.2) !important;
+}
+
+.folder-card.add-folder {
+    border-style: dashed !important;
+    border-width: 2px !important;
+    border-color: #38444d !important;
+}
+
+.folder-card.add-folder:hover {
+    border-color: #1da1f2 !important;
+    background-color: rgba(29, 161, 242, 0.05) !important;
+}
+
+.folder-icon {
+    margin-bottom: 12px !important;
+    color: #1da1f2 !important;
+}
+
+.folder-icon svg {
+    display: block !important;
+}
+
+.folder-name {
+    color: #ffffff !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+}
+
+.folder-count {
+    color: #8899a6 !important;
+    font-size: 14px !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+}
+
+.add-folder-icon {
+    margin-bottom: 8px !important;
+    color: #1da1f2 !important;
+}
+
+.add-folder-icon svg {
+    display: block !important;
+}
+
+.add-folder-text {
+    color: #8899a6 !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+}
+
+/* Delete folder button */
+body .folders-page .folders-grid .folder-card-wrapper .delete-folder-btn,
+body .folders-page .folders-grid .folder-card-wrapper button.delete-folder-btn,
+.folders-page .folders-grid .folder-card-wrapper button.delete-folder-btn[onclick] {
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    background-color: rgba(21, 32, 43, 0.9) !important;
+    border: 1px solid #38444d !important;
+    cursor: pointer !important;
+    opacity: 0 !important;
+    transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
+    padding: 8px !important;
+    border-radius: 8px !important;
+    z-index: 10 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #8899a6 !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+body .folders-page .folders-grid .folder-card-wrapper:hover .delete-folder-btn,
+body .folders-page .folders-grid .folder-card-wrapper:hover button.delete-folder-btn,
+.folders-page .folders-grid .folder-card-wrapper:hover button.delete-folder-btn[onclick] {
+    opacity: 1 !important;
+}
+
+body .folders-page .folders-grid .delete-folder-btn:hover,
+body .folders-page .folders-grid button.delete-folder-btn:hover,
+.folders-page .folders-grid button.delete-folder-btn[onclick]:hover {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+    border-color: #ef4444 !important;
+    transform: scale(1.1) !important;
+    color: #ef4444 !important;
+}
+
+body .folders-page .folders-grid .delete-folder-btn svg,
+body .folders-page .folders-grid button.delete-folder-btn svg {
+    display: block !important;
+    pointer-events: none !important;
+}
+
+/* Modal styles */
+.modal-overlay {
+    display: none !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: rgba(0, 0, 0, 0.7) !important;
+    z-index: 9999 !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+.modal-overlay.active {
+    display: flex !important;
+}
+
+.modal-content {
+    background-color: #192734 !important;
+    border-radius: 16px !important;
+    padding: 32px !important;
+    max-width: 400px !important;
+    width: 90% !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.modal-header {
+    margin-bottom: 24px;
+}
+
+.modal-header h2 {
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.modal-header p {
+    color: #8899a6;
+    font-size: 14px;
+}
+
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 14px;
+    background-color: #15202b;
+    border: 2px solid #38444d;
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.modal-input:focus {
+    outline: none;
+    border-color: #1da1f2;
+    background-color: #192734;
+}
+
+.modal-input::placeholder {
+    color: #6a7d8a;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.modal-btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.modal-btn-primary {
+    background-color: #1da1f2;
+    color: #ffffff;
+}
+
+.modal-btn-primary:hover {
+    background-color: #1a8cd8;
+}
+
+.modal-btn-secondary {
+    background-color: transparent;
+    color: #8899a6;
+    border: 2px solid #38444d;
+}
+
+.modal-btn-secondary:hover {
+    background-color: rgba(136, 153, 166, 0.1);
+}
+
+@media (max-width: 600px) {
+    .folders-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .folders-container {
+        padding: 20px;
+    }
+
+    .folders-header h1 {
+        font-size: 24px;
+    }
+}
