@@ -310,6 +310,15 @@
             reinitializeView() {
                 console.log('🔧 Reinitializing view components...');
                 
+                // Check if we're on the search page and ensure form is visible
+                const searchForm = document.querySelector('.search-form');
+                const searchFormWrapper = document.getElementById('searchFormWrapper');
+                if (searchForm && searchFormWrapper) {
+                    // We're on search page, make sure form is visible
+                    searchFormWrapper.classList.remove('hidden');
+                    console.log('👁️  Ensured search form is visible');
+                }
+                
                 // Update feedback state from current sets
                 if (typeof likedPapers !== 'undefined' && typeof dislikedPapers !== 'undefined') {
                     console.log(`📊 Current feedback state: ${likedPapers.size} liked, ${dislikedPapers.size} disliked`);
@@ -942,6 +951,20 @@
                 
                 // Initialize the view
                 initializeView();
+                
+                // Cache the initial page load so it can be restored later
+                setTimeout(() => {
+                    const url = window.location.pathname + window.location.search;
+                    const container = document.querySelector('.container');
+                    if (container) {
+                        spa.viewCache.set(url, {
+                            html: container.innerHTML,
+                            scrollY: window.scrollY,
+                            timestamp: Date.now()
+                        });
+                        console.log('💾 Initial page cached:', url);
+                    }
+                }, 500); // Wait for view to fully initialize
 
                 // Auto-hide/show header on scroll
                 let lastScrollTop = 0;
