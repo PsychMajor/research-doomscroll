@@ -27,12 +27,15 @@ async def init_db():
         print("⚠️  No DATABASE_URL found, using in-memory storage")
         return
     
+    print("🔄 Initializing database connection...")
     try:
         # Create connection pool
         pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+        print("✅ Database connection pool created")
         
         # Create tables
         async with pool.acquire() as conn:
+            print("🔄 Creating/verifying database tables...")
             # Users table
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -105,8 +108,11 @@ async def init_db():
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_paper_id ON feedback(paper_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_cache_key ON paper_cache(cache_key, source)')
+            print("✅ Tables and indexes created/verified")
             
             # Migration: Add columns if they don't exist
+            print("🔄 Running database migrations...")
+            migration_success = True
             try:
                 # Check and add user_id to profiles
                 user_id_exists = await conn.fetchval("""
@@ -160,16 +166,24 @@ async def init_db():
                 else:
                     print("✅ Folders column already exists")
                 
-                print("✅ Database migrations completed")
+                print("✅ Database migrations completed successfully")
             except Exception as migration_error:
-                print(f"⚠️  Migration error: {migration_error}")
+                migration_success = False
+                print(f"❌ Migration error: {migration_error}")
                 import traceback
                 traceback.print_exc()
+                print("⚠️  WARNING: Migrations failed! Application may not work correctly.")
+                print("⚠️  Please run: python migrate_db.py")
             
-        print("✅ Database initialized successfully")
+        if migration_success:
+            print("✅ Database initialized successfully")
+        else:
+            print("⚠️  Database initialized with migration errors")
     except Exception as e:
-        print(f"⚠️  Database initialization failed: {e}")
+        print(f"❌ Database initialization failed: {e}")
         print("   Falling back to in-memory storage")
+        import traceback
+        traceback.print_exc()
 
 async def close_db():
     """Close database connection pool"""
