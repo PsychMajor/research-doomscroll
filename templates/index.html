@@ -165,6 +165,7 @@
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
                 this.CACHE_VERSION = '15.0'; // Removed SVG, clean blue box with "Add" text only
+                this.lastSearchUrl = null; // Track last search results page
                 
                 // Check and clear old cache if version changed
                 this.checkCacheVersion();
@@ -184,6 +185,13 @@
             
             init() {
                 console.log('🚀 SPA Framework initializing...');
+                
+                // Check if we're on a search page and track it
+                const currentUrl = window.location.pathname + window.location.search;
+                if (currentUrl.includes('topics=') || currentUrl.includes('authors=')) {
+                    this.lastSearchUrl = currentUrl;
+                    console.log('📍 Initial search URL:', currentUrl);
+                }
                 
                 // Intercept all navigation
                 this.interceptLinks();
@@ -252,6 +260,9 @@
                     
                     this.currentView = url;
                     
+                    // Update Search nav link if needed
+                    this.updateSearchNavLink();
+                    
                 } catch (error) {
                     console.error('❌ Navigation error:', error);
                     // Fallback to full page load
@@ -264,6 +275,14 @@
             saveCurrentView() {
                 const url = window.location.pathname + window.location.search;
                 console.log('💾 Saving current view:', url);
+                
+                // Track if this is a search results page
+                if (url.includes('topics=') || url.includes('authors=')) {
+                    this.lastSearchUrl = url;
+                    console.log('📍 Saved last search URL:', url);
+                    // Update the Search nav link to point to this URL
+                    this.updateSearchNavLink();
+                }
                 
                 // Save scroll position
                 const scrollY = window.scrollY;
@@ -284,6 +303,14 @@
                 });
                 
                 console.log('✅ View saved to cache');
+            }
+            
+            updateSearchNavLink() {
+                const searchNavLink = document.querySelector('.nav-menu a[href="/"]');
+                if (searchNavLink && this.lastSearchUrl) {
+                    searchNavLink.setAttribute('href', this.lastSearchUrl);
+                    console.log('🔗 Updated Search nav link to:', this.lastSearchUrl);
+                }
             }
             
             async restoreView(url, cached) {
