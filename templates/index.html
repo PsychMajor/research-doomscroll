@@ -1931,10 +1931,11 @@
                             setTimeout(() => {
                                 card.remove();
                                 
-                                // Check if feed is empty now and reload to show empty state
+                                // Check if feed is empty now and navigate to show empty state
                                 const feed = document.querySelector('.feed');
                                 if (feed && feed.children.length === 0) {
-                                    location.reload();
+                                    // Navigate using SPA instead of full reload
+                                    window.location.href = `/folder/${folderId}`;
                                 }
                                 
                                 // Update folder header count if it exists
