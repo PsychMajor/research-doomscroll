@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Folders - Research Doomscroll</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            background-color: #15202b;
+            margin: 0;
+            padding: 0;
+        }
+
+        .folders-container {
+            padding: 40px 20px;
+            max-width: 1200px !important;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .folders-header {
+            margin-bottom: 40px;
+        }
+
+        .folders-header h1 {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .folders-header p {
+            color: #8899a6;
+            font-size: 16px;
+        }
+
+        .folders-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+            gap: 20px !important;
+            margin-bottom: 30px;
+        }
+
+        .folder-card {
+            background-color: #192734 !important;
+            border: 2px solid #38444d !important;
+            border-radius: 16px !important;
+            padding: 30px 24px !important;
+            text-align: center !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+            text-decoration: none !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-height: 120px !important;
+        }
+
+        .folder-card:hover {
+            background-color: #1d2f3f !important;
+            border-color: #1da1f2 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(29, 161, 242, 0.2) !important;
+        }
+
+        .folder-card.add-folder {
+            border-style: dashed !important;
+            border-color: #38444d !important;
+        }
+
+        .folder-card.add-folder:hover {
+            border-color: #1da1f2 !important;
+            background-color: rgba(29, 161, 242, 0.05) !important;
+        }
+
+        .folder-icon {
+            font-size: 36px !important;
+            margin-bottom: 12px !important;
+        }
+
+        .folder-name {
+            color: #ffffff !important;
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        .folder-count {
+            color: #8899a6 !important;
+            font-size: 14px !important;
+            margin-top: 4px !important;
+            margin-bottom: 0 !important;
+        }
+
+        .add-folder-icon {
+            font-size: 48px !important;
+            color: #1da1f2 !important;
+            margin-bottom: 8px !important;
+        }
+
+        .add-folder-text {
+            color: #8899a6 !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: rgba(0, 0, 0, 0.7) !important;
+            z-index: 9999 !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+
+        .modal-overlay.active {
+            display: flex !important;
+        }
+
+        .modal-content {
+            background-color: #192734 !important;
+            border-radius: 16px !important;
+            padding: 32px !important;
+            max-width: 400px !important;
+            width: 90% !important;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .modal-header {
+            margin-bottom: 24px;
+        }
+
+        .modal-header h2 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .modal-header p {
+            color: #8899a6;
+            font-size: 14px;
+        }
+
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 14px;
+            background-color: #15202b;
+            border: 2px solid #38444d;
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: #1da1f2;
+            background-color: #192734;
+        }
+
+        .modal-input::placeholder {
+            color: #6a7d8a;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .modal-btn-primary {
+            background-color: #1da1f2;
+            color: #ffffff;
+        }
+
+        .modal-btn-primary:hover {
+            background-color: #1a8cd8;
+        }
+
+        .modal-btn-secondary {
+            background-color: transparent;
+            color: #8899a6;
+            border: 2px solid #38444d;
+        }
+
+        .modal-btn-secondary:hover {
+            background-color: rgba(136, 153, 166, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .folders-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .folders-container {
+                padding: 20px;
+            }
+
+            .folders-header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>Research Doomscroll</h1>
+                    <p class="subtitle">Infinite scroll through research papers</p>
+                </div>
+                <div class="header-actions">
+                    {% if user and user.id != 'anonymous' %}
+                        <div class="user-info">
+                            <img src="{{ user.picture }}" alt="{{ user.name }}" class="user-avatar">
+                            <span class="user-name">Welcome {{ user.name.split()[0] if user.name else user.email.split('@')[0] }}</span>
+                            <a href="/logout" class="btn-logout">Logout</a>
+                        </div>
+                    {% else %}
+                        <a href="/login" class="btn-login">Sign in with Google</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+        
+        <!-- Navigation Menu -->
+        <nav class="nav-menu">
+            <a href="/" class="nav-item">Search</a>
+            <div class="nav-item-dropdown">
+                <a href="/folders" class="nav-item active">Folders</a>
+                <div class="dropdown-menu">
+                    {% if folders %}
+                        {% for folder in folders %}
+                            {% if folder.id == 'likes' %}
+                                <a href="/likes" class="dropdown-item">{{ folder.name }}</a>
+                            {% else %}
+                                <a href="/folder/{{ folder.id }}" class="dropdown-item">{{ folder.name }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <a href="/likes" class="dropdown-item">Likes</a>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="#Following" class="nav-item">Following</a>
+            <a href="#Recommended" class="nav-item">Recommended</a>
+            <a href="#Contact" class="nav-item">Contact</a>
+        </nav>
+
+        <div class="folders-container">
+            <div class="folders-header">
+                <h1>My Folders</h1>
+                <p>Organize your research papers into collections</p>
+            </div>
+
+            <div class="folders-grid">
+                <!-- Existing folders -->
+                <a href="/likes" class="folder-card">
+                    <div class="folder-icon">📁</div>
+                    <h3 class="folder-name">Likes</h3>
+                    <p class="folder-count">Your liked papers</p>
+                </a>
+
+                {% for folder in folders %}
+                    {% if folder.id != 'likes' %}
+                    <a href="/folder/{{ folder.id }}" class="folder-card">
+                        <div class="folder-icon">📁</div>
+                        <h3 class="folder-name">{{ folder.name }}</h3>
+                        <p class="folder-count">0 papers</p>
+                    </a>
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Add new folder button -->
+                <div class="folder-card add-folder" onclick="openAddFolderModal()">
+                    <div class="add-folder-icon">+</div>
+                    <p class="add-folder-text">Add Folder</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Folder Modal -->
+    <div class="modal-overlay" id="addFolderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Folder</h2>
+                <p>Give your folder a name</p>
+            </div>
+            <form class="modal-form" method="POST" action="/folders/add">
+                <input 
+                    type="text" 
+                    name="folder_name" 
+                    class="modal-input" 
+                    placeholder="e.g., Machine Learning, CRISPR Research"
+                    required
+                    autofocus
+                >
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn modal-btn-secondary" onclick="closeAddFolderModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="modal-btn modal-btn-primary">
+                        Create Folder
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openAddFolderModal() {
+            console.log('Opening modal...');
+            const modal = document.getElementById('addFolderModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('Modal opened, classes:', modal.classList);
+            } else {
+                console.error('Modal element not found!');
+            }
+        }
+
+        function closeAddFolderModal() {
+            console.log('Closing modal...');
+            const modal = document.getElementById('addFolderModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+
+        // Close modal on outside click
+        document.getElementById('addFolderModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddFolderModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAddFolderModal();
+            }
+        });
+    </script>
+</body>
+</html>

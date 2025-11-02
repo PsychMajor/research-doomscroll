@@ -577,6 +577,44 @@ async def get_likes(request: Request):
         "show_form": False
     })
 
+@app.get("/folders", response_class=HTMLResponse)
+async def get_folders(request: Request):
+    """Display folders landing page"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    # Load user's folders from database
+    profile = await database.load_profile(user_id=user_id)
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    
+    return templates.TemplateResponse("folders.html", {
+        "request": request,
+        "user": user,
+        "folders": folders,
+        "profile": profile
+    })
+
+@app.post("/folders/add")
+async def add_folder(request: Request, folder_name: str = Form(...)):
+    """Add a new folder"""
+    user = get_current_user(request)
+    user_id = user['id']
+    
+    profile = await database.load_profile(user_id=user_id)
+    folders = profile.get('folders', [{'name': 'Likes', 'id': 'likes'}])
+    
+    # Create new folder with unique ID
+    new_folder = {
+        'name': folder_name,
+        'id': folder_name.lower().replace(' ', '_')
+    }
+    folders.append(new_folder)
+    
+    # Save updated folders
+    await database.save_folders(folders, user_id=user_id)
+    
+    return RedirectResponse(url="/folders", status_code=303)
+
 # ============================================================================
 # PROFILE ROUTES
 # ============================================================================

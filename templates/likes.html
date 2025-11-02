@@ -32,9 +32,19 @@
         <nav class="nav-menu">
             <a href="/" class="nav-item">Search</a>
             <div class="nav-item-dropdown">
-                <a href="/likes" class="nav-item active">Folders</a>
+                <a href="/folders" class="nav-item">Folders</a>
                 <div class="dropdown-menu">
-                    <a href="/likes" class="dropdown-item">Likes</a>
+                    {% if profile and profile.get('folders') %}
+                        {% for folder in profile.get('folders', []) %}
+                            {% if folder.id == 'likes' %}
+                                <a href="/likes" class="dropdown-item active">{{ folder.name }}</a>
+                            {% else %}
+                                <a href="/folder/{{ folder.id }}" class="dropdown-item">{{ folder.name }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <a href="/likes" class="dropdown-item active">Likes</a>
+                    {% endif %}
                 </div>
             </div>
             <a href="#Following" class="nav-item">Following</a>

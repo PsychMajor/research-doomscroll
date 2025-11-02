@@ -116,7 +116,11 @@ async def init_db():
                     ALTER TABLE feedback 
                     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
                 ''')
-                print("✅ Migration: user_id columns added/verified")
+                await conn.execute('''
+                    ALTER TABLE profiles 
+                    ADD COLUMN IF NOT EXISTS folders JSONB DEFAULT '[]'::jsonb
+                ''')
+                print("✅ Migration: user_id and folders columns added/verified")
             except Exception as migration_error:
                 print(f"⚠️  Migration warning: {migration_error}")
             
@@ -206,27 +210,32 @@ async def load_profile(user_id: Optional[int] = None) -> Dict:
         # Use in-memory storage
         if user_id and user_id in MEMORY_PROFILES:
             return MEMORY_PROFILES[user_id]
-        return {"topics": [], "authors": []}
+        return {"topics": [], "authors": [], "folders": [{"name": "Likes", "id": "likes"}]}
     
     try:
         async with pool.acquire() as conn:
             if user_id:
                 row = await conn.fetchrow(
-                    'SELECT topics, authors FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                    'SELECT topics, authors, folders FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
                     user_id
                 )
             else:
-                row = await conn.fetchrow('SELECT topics, authors FROM profiles ORDER BY updated_at DESC LIMIT 1')
+                row = await conn.fetchrow('SELECT topics, authors, folders FROM profiles ORDER BY updated_at DESC LIMIT 1')
             
             if row:
+                folders = json.loads(row['folders']) if row['folders'] else [{"name": "Likes", "id": "likes"}]
+                # Ensure default Likes folder exists
+                if not any(f['id'] == 'likes' for f in folders):
+                    folders.insert(0, {"name": "Likes", "id": "likes"})
                 return {
                     "topics": json.loads(row['topics']) if row['topics'] else [],
-                    "authors": json.loads(row['authors']) if row['authors'] else []
+                    "authors": json.loads(row['authors']) if row['authors'] else [],
+                    "folders": folders
                 }
     except Exception as e:
         print(f"⚠️  Error loading profile: {e}")
     
-    return {"topics": [], "authors": []}
+    return {"topics": [], "authors": [], "folders": [{"name": "Likes", "id": "likes"}]}
 
 async def save_profile(topics_list: List[str], authors_list: List[str], user_id: Optional[int] = None):
     """Save user profile to database"""
@@ -249,6 +258,42 @@ async def save_profile(topics_list: List[str], authors_list: List[str], user_id:
         print("✅ Profile saved to database")
     except Exception as e:
         print(f"⚠️  Error saving profile: {e}")
+
+async def save_folders(folders_list: List[Dict], user_id: Optional[int] = None):
+    """Save user folders to database"""
+    if not pool:
+        # Use in-memory storage
+        if user_id:
+            if user_id not in MEMORY_PROFILES:
+                MEMORY_PROFILES[user_id] = {"topics": [], "authors": [], "folders": []}
+            MEMORY_PROFILES[user_id]["folders"] = folders_list
+            print(f"✅ Folders saved to memory for user {user_id}")
+        return
+    
+    try:
+        async with pool.acquire() as conn:
+            # Check if profile exists
+            profile = await conn.fetchrow(
+                'SELECT id FROM profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
+                user_id
+            )
+            
+            if profile:
+                # Update existing profile
+                await conn.execute('''
+                    UPDATE profiles 
+                    SET folders = $1, updated_at = NOW()
+                    WHERE user_id = $2
+                ''', json.dumps(folders_list), user_id)
+            else:
+                # Create new profile with folders
+                await conn.execute('''
+                    INSERT INTO profiles (user_id, topics, authors, folders)
+                    VALUES ($1, $2, $3, $4)
+                ''', user_id, json.dumps([]), json.dumps([]), json.dumps(folders_list))
+            print("✅ Folders saved to database")
+    except Exception as e:
+        print(f"⚠️  Error saving folders: {e}")
 
 # Feedback functions
 async def load_feedback(user_id: Optional[int] = None) -> Dict:
