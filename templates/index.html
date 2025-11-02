@@ -164,9 +164,22 @@
                 this.currentView = null;
                 this.viewCache = new Map(); // Cache view states
                 this.isNavigating = false;
+                this.CACHE_VERSION = '4.0'; // Increment to clear old caches with button
+                
+                // Check and clear old cache if version changed
+                this.checkCacheVersion();
                 
                 // Initialize on page load
                 this.init();
+            }
+            
+            checkCacheVersion() {
+                const storedVersion = localStorage.getItem('spa_cache_version');
+                if (storedVersion !== this.CACHE_VERSION) {
+                    console.log(`🗑️  Clearing old SPA cache (upgrading from v${storedVersion || 'none'} to v${this.CACHE_VERSION})`);
+                    this.viewCache.clear();
+                    localStorage.setItem('spa_cache_version', this.CACHE_VERSION);
+                }
             }
             
             init() {
