@@ -377,6 +377,8 @@
                 // Check if we're on the search page and ensure form is visible
                 const searchForm = document.querySelector('.search-form');
                 const searchFormWrapper = document.getElementById('searchFormWrapper');
+                const loadMoreContainer = document.getElementById('loadMoreContainer');
+                
                 if (searchForm && searchFormWrapper) {
                     // We're on search page, make sure form is visible
                     searchFormWrapper.classList.remove('hidden');
@@ -387,6 +389,11 @@
                 const foldersContainer = document.querySelector('.folders-container');
                 if (foldersContainer) {
                     console.log('📁 Detected folders page, reinitializing folders...');
+                    // Hide load more button on folders pages
+                    if (loadMoreContainer) {
+                        loadMoreContainer.style.display = 'none';
+                        console.log('🚫 Hidden load more button on folders page');
+                    }
                     // Reinitialize folders page modal and hover effects
                     if (typeof initializeModalListeners === 'function') {
                         setTimeout(() => {
@@ -405,6 +412,12 @@
                             forceInitialization(true);
                             console.log('✅ Folders forced reinitialization complete');
                         }, 100);
+                    }
+                } else {
+                    // Show load more button on search pages (if it exists)
+                    if (loadMoreContainer && document.querySelector('.feed')) {
+                        loadMoreContainer.style.display = 'flex';
+                        console.log('👁️  Showed load more button on search page');
                     }
                 }
                 
