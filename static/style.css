@@ -2025,10 +2025,15 @@ select.form-input {
 .folder-icon {
     margin-bottom: 12px !important;
     color: #1da1f2 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
+
 
 .folder-icon svg {
     display: block !important;
+    margin: 0 auto !important;
 }
 
 .folder-name {
