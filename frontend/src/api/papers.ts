@@ -1,11 +1,19 @@
 import apiClient from './client';
-import type { SearchParams, SearchResponse, Paper } from '../types/paper';
+import type { SearchParams, Paper } from '../types/paper';
 
 export const papersApi = {
   // Search papers
-  search: async (params: SearchParams): Promise<SearchResponse> => {
-    const { data } = await apiClient.get('/papers/search', { params });
-    return data;
+  search: async (params: SearchParams): Promise<Paper[]> => {
+    const { data } = await apiClient.get('/api/fetch-papers', { 
+      params: {
+        topics: params.topics || '',
+        authors: params.authors || '',
+        page: params.page || 1,
+        per_page: 200,
+        sort_by: params.sortBy || 'recency',
+      }
+    });
+    return data.papers || [];
   },
 
   // Get paper by ID

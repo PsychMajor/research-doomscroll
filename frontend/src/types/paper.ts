@@ -1,28 +1,23 @@
 // Paper types matching backend models
 export interface Paper {
-  id: string;
+  paperId: string;
   title: string;
-  authors: string[];
-  publication_date: string;
-  abstract: string;
+  authors: Array<{ name: string; id?: string }>;
+  year?: number;
+  abstract?: string | null;
   doi?: string | null;
-  cited_by_count?: number;
-  openalex_url?: string | null;
-  pdf_url?: string | null;
-  concepts?: string[];
-  relevance_score?: number;
-  like_status?: string | null;
+  citationCount?: number;
+  url?: string | null;
+  venue?: string | null;
+  tldr?: string | null;
+  source?: string;
 }
 
 export interface SearchParams {
-  query: string;
-  concepts?: string[];
-  year_min?: number;
-  year_max?: number;
-  cited_by_min?: number;
-  sort_by?: 'relevance' | 'cited_by_count' | 'publication_date';
-  offset?: number;
-  limit?: number;
+  topics?: string;  // comma-separated
+  authors?: string; // comma-separated
+  sortBy?: 'recency' | 'relevance';
+  page?: number;
 }
 
 export interface SearchResponse {

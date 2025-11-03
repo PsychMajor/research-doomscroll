@@ -5,21 +5,24 @@ import type { SearchParams } from '../types/paper';
 export const usePapers = () => {
   const queryClient = useQueryClient();
 
-  // Search papers with infinite scroll
-  const useSearchPapers = (params: SearchParams) => {
+  // Search papers with pagination
+  const useSearchPapers = (params: SearchParams | null) => {
     return useInfiniteQuery({
       queryKey: ['papers', 'search', params],
-      queryFn: ({ pageParam = 0 }) =>
+      queryFn: ({ pageParam = 1 }) =>
         papersApi.search({
-          ...params,
-          offset: pageParam,
+          ...params!,
+          page: pageParam,
         }),
       getNextPageParam: (lastPage, allPages) => {
-        if (!lastPage.has_more) return undefined;
-        return allPages.reduce((total, page) => total + page.papers.length, 0);
+        // If we got 200 papers (full page), there might be more
+        if (lastPage.length === 200) {
+          return allPages.length + 1;
+        }
+        return undefined;
       },
-      initialPageParam: 0,
-      enabled: !!(params.query || params.concepts?.length),
+      initialPageParam: 1,
+      enabled: !!params && !!(params.topics || params.authors),
     });
   };
 

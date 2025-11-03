@@ -5,9 +5,9 @@ import './PaperCard.css';
 interface PaperCardProps {
   paper: Paper;
   likeStatus?: 'liked' | 'disliked' | null;
-  onLike: (paperId: string) => void;
-  onDislike: (paperId: string) => void;
-  onAddToFolder: (paperId: string) => void;
+  onLike?: (paperId: string) => void;
+  onDislike?: (paperId: string) => void;
+  onAddToFolder?: (paperId: string) => void;
 }
 
 export const PaperCard: React.FC<PaperCardProps> = ({
@@ -19,15 +19,11 @@ export const PaperCard: React.FC<PaperCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const formatAuthors = (authors: string[]) => {
+  const formatAuthors = (authors: Array<{ name: string; id?: string }>) => {
     if (authors.length === 0) return 'Unknown authors';
-    if (authors.length <= 3) return authors.join(', ');
-    return `${authors.slice(0, 3).join(', ')} et al.`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+    const authorNames = authors.map(a => a.name);
+    if (authorNames.length <= 3) return authorNames.join(', ');
+    return `${authorNames.slice(0, 3).join(', ')} et al.`;
   };
 
   return (
@@ -41,19 +37,19 @@ export const PaperCard: React.FC<PaperCardProps> = ({
       </div>
 
       <div className="paper-metadata">
-        <span className="paper-date">{formatDate(paper.publication_date)}</span>
-        {paper.cited_by_count !== undefined && (
+        {paper.year && (
+          <span className="paper-date">{paper.year}</span>
+        )}
+        {paper.citationCount !== undefined && (
           <>
             <span className="metadata-divider">•</span>
-            <span className="paper-citations">{paper.cited_by_count} citations</span>
+            <span className="paper-citations">{paper.citationCount} citations</span>
           </>
         )}
-        {paper.relevance_score && (
+        {paper.venue && (
           <>
             <span className="metadata-divider">•</span>
-            <span className="paper-relevance">
-              Relevance: {Math.round(paper.relevance_score * 100)}%
-            </span>
+            <span className="paper-venue">{paper.venue}</span>
           </>
         )}
       </div>
@@ -74,62 +70,64 @@ export const PaperCard: React.FC<PaperCardProps> = ({
         </div>
       )}
 
-      {paper.concepts && paper.concepts.length > 0 && (
-        <div className="paper-concepts">
-          {paper.concepts.slice(0, 5).map((concept, idx) => (
-            <span key={idx} className="concept-tag">
-              {concept}
-            </span>
-          ))}
+      {paper.tldr && (
+        <div className="paper-tldr">
+          <strong>TL;DR:</strong> {paper.tldr}
         </div>
       )}
 
       <div className="paper-actions">
-        <button
-          onClick={() => onLike(paper.id)}
-          className={`action-btn like-btn ${likeStatus === 'liked' ? 'active' : ''}`}
-          title="Like"
-        >
-          {likeStatus === 'liked' ? '❤️' : '🤍'}
-        </button>
+        {onLike && (
+          <button
+            onClick={() => onLike(paper.paperId)}
+            className={`action-btn like-btn ${likeStatus === 'liked' ? 'active' : ''}`}
+            title="Like"
+          >
+            {likeStatus === 'liked' ? '❤️' : '🤍'}
+          </button>
+        )}
 
-        <button
-          onClick={() => onDislike(paper.id)}
-          className={`action-btn dislike-btn ${likeStatus === 'disliked' ? 'active' : ''}`}
-          title="Dislike"
-        >
-          👎
-        </button>
+        {onDislike && (
+          <button
+            onClick={() => onDislike(paper.paperId)}
+            className={`action-btn dislike-btn ${likeStatus === 'disliked' ? 'active' : ''}`}
+            title="Dislike"
+          >
+            👎
+          </button>
+        )}
 
-        <button
-          onClick={() => onAddToFolder(paper.id)}
-          className="action-btn folder-btn"
-          title="Add to folder"
-        >
-          ➕
-        </button>
+        {onAddToFolder && (
+          <button
+            onClick={() => onAddToFolder(paper.paperId)}
+            className="action-btn folder-btn"
+            title="Add to folder"
+          >
+            ➕
+          </button>
+        )}
 
-        {paper.openalex_url && (
+        {paper.url && (
           <a
-            href={paper.openalex_url}
+            href={paper.url}
             target="_blank"
             rel="noopener noreferrer"
             className="action-btn link-btn"
-            title="View on OpenAlex"
+            title="View paper"
           >
             🔗
           </a>
         )}
 
-        {paper.pdf_url && (
+        {paper.doi && (
           <a
-            href={paper.pdf_url}
+            href={`https://doi.org/${paper.doi}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="action-btn pdf-btn"
-            title="Download PDF"
+            className="action-btn doi-btn"
+            title="View on DOI"
           >
-            📄
+            DOI
           </a>
         )}
       </div>
