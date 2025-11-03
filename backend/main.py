@@ -66,18 +66,15 @@ templates = Jinja2Templates(directory="templates")
 
 
 # Import and include routers
-from .routers import papers, profile, feedback, folders
+from .routers import papers, profile, feedback, folders, auth, analytics
 
 # Include API routers
 app.include_router(papers.router)
 app.include_router(profile.router)
 app.include_router(feedback.router)
 app.include_router(folders.router)
-
-# TODO: Add remaining routers as we create them
-# from .routers import auth, analytics
-# app.include_router(auth.router)
-# app.include_router(analytics.router)
+app.include_router(auth.router)
+app.include_router(analytics.router)
 
 
 @app.get("/")
