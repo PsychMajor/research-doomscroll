@@ -65,10 +65,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-# TODO: Import and include routers here as we create them
-# from .routers import auth, papers, profile, folders, feedback, analytics
+# Import and include routers
+from .routers import papers
+
+# Include API routers
+app.include_router(papers.router)
+
+# TODO: Add remaining routers as we create them
+# from .routers import auth, profile, folders, feedback, analytics
 # app.include_router(auth.router)
-# app.include_router(papers.router)
 # app.include_router(profile.router)
 # app.include_router(folders.router)
 # app.include_router(feedback.router)
