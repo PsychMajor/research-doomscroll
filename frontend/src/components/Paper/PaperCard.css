@@ -1,0 +1,168 @@
+.paper-card {
+  background: #133322;
+  border: 1px solid #3b5245;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+}
+
+.paper-card:hover {
+  border-color: #4ade80;
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.1);
+}
+
+.paper-header {
+  margin-bottom: 0.75rem;
+}
+
+.paper-title {
+  color: #e5f2e9;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.paper-authors {
+  color: #a7c8b2;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.paper-metadata {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #7ca28a;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.metadata-divider {
+  color: #3b5245;
+}
+
+.paper-abstract {
+  margin-bottom: 1rem;
+}
+
+.paper-abstract p {
+  color: #c4d4b0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.paper-abstract p.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.paper-abstract p.expanded {
+  display: block;
+}
+
+.expand-btn {
+  background: none;
+  border: none;
+  color: #4ade80;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.25rem 0;
+  margin-top: 0.5rem;
+  text-decoration: underline;
+}
+
+.expand-btn:hover {
+  color: #22c55e;
+}
+
+.paper-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.concept-tag {
+  background: #0f261b;
+  color: #84cc16;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  border: 1px solid #3b5245;
+}
+
+.paper-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.action-btn {
+  background: #0f261b;
+  border: 1px solid #3b5245;
+  color: #a7c8b2;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn:hover {
+  background: #0b1c14;
+  border-color: #4ade80;
+  transform: translateY(-1px);
+}
+
+.like-btn.active {
+  background: #4ade80;
+  border-color: #4ade80;
+  color: #0b1c14;
+}
+
+.dislike-btn.active {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.folder-btn:hover {
+  background: #2dd4bf;
+  border-color: #2dd4bf;
+  color: #0b1c14;
+}
+
+.link-btn:hover,
+.pdf-btn:hover {
+  background: #84cc16;
+  border-color: #84cc16;
+  color: #0b1c14;
+}
+
+@media (max-width: 768px) {
+  .paper-card {
+    padding: 1rem;
+  }
+
+  .paper-title {
+    font-size: 1.1rem;
+  }
+
+  .paper-actions {
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    font-size: 1rem;
+    padding: 0.4rem 0.8rem;
+  }
+}

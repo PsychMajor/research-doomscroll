@@ -1,0 +1,35 @@
+.likes-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.likes-header {
+  margin-bottom: 2rem;
+}
+
+.likes-header h1 {
+  color: #e5f2e9;
+  font-size: 2.5rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.likes-subtitle {
+  color: #a7c8b2;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.papers-container {
+  margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .likes-page {
+    padding: 1rem;
+  }
+
+  .likes-header h1 {
+    font-size: 2rem;
+  }
+}
