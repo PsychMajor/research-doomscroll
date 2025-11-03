@@ -4,6 +4,6 @@ API Routers
 Domain-specific API endpoints organized by resource type.
 """
 
-from . import papers
+from . import papers, profile, feedback, folders
 
-__all__ = ["papers"]
+__all__ = ["papers", "profile", "feedback", "folders"]
