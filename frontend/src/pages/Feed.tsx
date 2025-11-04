@@ -9,19 +9,10 @@ export const Feed: React.FC = () => {
   const [topics, setTopics] = useState('');
   const [authors, setAuthors] = useState('');
   const [sortBy, setSortBy] = useState<'recency' | 'relevance'>('recency');
-  const [searchTriggered, setSearchTriggered] = useState(false);
-  const [page, setPage] = useState(1);
+  const [activeSearch, setActiveSearch] = useState<{ topics: string; authors: string; sortBy: 'recency' | 'relevance' } | null>(null);
   
   const observerTarget = useRef<HTMLDivElement>(null);
   const { useSearchPapers } = usePapers();
-
-  // Build search params
-  const searchParams = searchTriggered && (topics || authors) ? {
-    topics,
-    authors,
-    sortBy,
-    page,
-  } : null;
 
   const {
     data,
@@ -31,12 +22,17 @@ export const Feed: React.FC = () => {
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
-  } = useSearchPapers(searchParams || { topics: '', authors: '', sortBy, page: 1 });
+  } = useSearchPapers(activeSearch);
 
   // Handle search
   const handleSearch = () => {
-    setPage(1);
-    setSearchTriggered(true);
+    if (topics || authors) {
+      setActiveSearch({
+        topics,
+        authors,
+        sortBy,
+      });
+    }
   };
 
   // Handle Enter key in inputs
@@ -50,9 +46,9 @@ export const Feed: React.FC = () => {
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     const [target] = entries;
     if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
-      setPage(prev => prev + 1);
+      fetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useEffect(() => {
     const element = observerTarget.current;
@@ -64,13 +60,6 @@ export const Feed: React.FC = () => {
 
     return () => observer.unobserve(element);
   }, [handleObserver]);
-
-  // Trigger fetchNextPage when page changes
-  useEffect(() => {
-    if (page > 1 && searchTriggered) {
-      fetchNextPage();
-    }
-  }, [page, searchTriggered, fetchNextPage]);
 
   // Flatten all papers from all pages
   const allPapers = data?.pages.flat() ?? [];
@@ -123,24 +112,24 @@ export const Feed: React.FC = () => {
       </div>
 
       <div className="papers-container">
-        {!searchTriggered && (
+        {!activeSearch && (
           <div className="empty-state">
             <p>👆 Enter topics or authors above to start discovering papers</p>
           </div>
         )}
 
-        {searchTriggered && isLoading && (
+        {activeSearch && isLoading && (
           <LoadingSpinner text="Searching papers..." />
         )}
 
-        {searchTriggered && isError && (
+        {activeSearch && isError && (
           <ErrorMessage 
             message={error?.message || 'Failed to fetch papers'}
             onRetry={handleSearch}
           />
         )}
 
-        {searchTriggered && !isLoading && allPapers.length === 0 && (
+        {activeSearch && !isLoading && allPapers.length === 0 && (
           <div className="empty-state">
             <p>No papers found. Try different search terms.</p>
           </div>
