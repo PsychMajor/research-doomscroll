@@ -1897,7 +1897,7 @@
             }
 
             async function removePaperFromFolder(paperId, folderId) {
-                console.log('DELETE:', paperId, 'from folder:', folderId);
+                if (!confirm('Remove this paper from the folder?')) return;
                 
                 try {
                     const formData = new FormData();
@@ -1930,10 +1930,14 @@
                             
                             setTimeout(() => {
                                 card.remove();
-                                console.log('✅ Card removed');
+                                
+                                // Check if feed is empty now and reload to show empty state
+                                const feed = document.querySelector('.feed');
+                                if (feed && feed.children.length === 0) {
+                                    location.reload();
+                                }
                                 
                                 // Update folder header count if it exists
-                                const feed = document.querySelector('.feed');
                                 const folderHeader = document.querySelector('.folder-header h2');
                                 if (folderHeader && feed) {
                                     const count = feed.children.length;

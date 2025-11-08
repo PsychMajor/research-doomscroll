@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
-  baseURL: import.meta.env.DEV ? 'http://localhost:8000' : '',
+  baseURL: '', // Use relative URLs so Vite proxy can intercept in dev mode
   withCredentials: true, // Important for session cookies
   headers: {
     'Content-Type': 'application/json',

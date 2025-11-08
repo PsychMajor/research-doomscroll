@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePapers } from '../hooks/usePapers';
+import { useFeedback } from '../hooks/useFeedback';
 import { PaperCard } from '../components/Paper/PaperCard';
 import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { ErrorMessage } from '../components/Common/ErrorMessage';
+import type { Paper } from '../types/paper';
 import './Feed.css';
 
 export const Feed: React.FC = () => {
@@ -13,6 +15,7 @@ export const Feed: React.FC = () => {
   
   const observerTarget = useRef<HTMLDivElement>(null);
   const { useSearchPapers } = usePapers();
+  const { feedback, like, unlike, dislike, undislike } = useFeedback();
 
   const {
     data,
@@ -40,6 +43,33 @@ export const Feed: React.FC = () => {
     if (e.key === 'Enter') {
       handleSearch();
     }
+  };
+
+  // Handle like/unlike
+  const handleLike = (paper: Paper) => {
+    const isLiked = feedback.liked.includes(paper.paperId);
+    if (isLiked) {
+      unlike(paper.paperId);
+    } else {
+      like({ paperId: paper.paperId, paperData: paper });
+    }
+  };
+
+  // Handle dislike/undislike
+  const handleDislike = (paper: Paper) => {
+    const isDisliked = feedback.disliked.includes(paper.paperId);
+    if (isDisliked) {
+      undislike(paper.paperId);
+    } else {
+      dislike({ paperId: paper.paperId, paperData: paper });
+    }
+  };
+
+  // Get like status for a paper
+  const getLikeStatus = (paperId: string): 'liked' | 'disliked' | null => {
+    if (feedback.liked.includes(paperId)) return 'liked';
+    if (feedback.disliked.includes(paperId)) return 'disliked';
+    return null;
   };
 
   // Infinite scroll observer
@@ -138,7 +168,13 @@ export const Feed: React.FC = () => {
         {allPapers.length > 0 && (
           <div className="papers-list">
             {allPapers.map((paper) => (
-              <PaperCard key={paper.paperId} paper={paper} />
+              <PaperCard 
+                key={paper.paperId} 
+                paper={paper}
+                likeStatus={getLikeStatus(paper.paperId)}
+                onLike={() => handleLike(paper)}
+                onDislike={() => handleDislike(paper)}
+              />
             ))}
           </div>
         )}

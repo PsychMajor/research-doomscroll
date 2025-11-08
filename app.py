@@ -636,17 +636,15 @@ async def get_folder_contents(request: Request, folder_id: str):
     # Get papers in this folder
     papers = folder.get('papers', [])
     
-    import time
     response = templates.TemplateResponse("folder_contents.html", {
         "request": request,
         "user": user,
         "folder": folder,
         "papers": papers,
-        "profile": profile,
-        "cache_bust": int(time.time())
+        "profile": profile
     })
     
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     

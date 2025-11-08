@@ -1,37 +1,60 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { feedbackApi } from '../api';
-import type { Feedback } from '../types/feedback';
+import type { Paper } from '../types/paper';
 
 export const useFeedback = () => {
   const queryClient = useQueryClient();
 
-  // Submit feedback (like/dislike)
-  const useSubmitFeedback = () => {
-    return useMutation({
-      mutationFn: (feedback: Feedback) => feedbackApi.submit(feedback),
-      onSuccess: () => {
-        // Invalidate profile to refresh liked/disliked papers
-        queryClient.invalidateQueries({ queryKey: ['profile'] });
-        queryClient.invalidateQueries({ queryKey: ['profile', 'liked-papers'] });
-        queryClient.invalidateQueries({ queryKey: ['profile', 'disliked-papers'] });
-      },
-    });
-  };
+  // Get feedback data
+  const feedbackQuery = useQuery({
+    queryKey: ['feedback'],
+    queryFn: feedbackApi.getFeedback,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    retry: 1, // Only retry once on failure
+  });
 
-  // Remove feedback
-  const useRemoveFeedback = () => {
-    return useMutation({
-      mutationFn: (paperId: string) => feedbackApi.remove(paperId),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['profile'] });
-        queryClient.invalidateQueries({ queryKey: ['profile', 'liked-papers'] });
-        queryClient.invalidateQueries({ queryKey: ['profile', 'disliked-papers'] });
-      },
-    });
-  };
+  // Like a paper
+  const likeMutation = useMutation({
+    mutationFn: ({ paperId, paperData }: { paperId: string; paperData?: Paper }) =>
+      feedbackApi.like(paperId, paperData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  });
+
+  // Unlike a paper
+  const unlikeMutation = useMutation({
+    mutationFn: (paperId: string) => feedbackApi.unlike(paperId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  });
+
+  // Dislike a paper
+  const dislikeMutation = useMutation({
+    mutationFn: ({ paperId, paperData }: { paperId: string; paperData?: Paper }) =>
+      feedbackApi.dislike(paperId, paperData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  });
+
+  // Undislike a paper
+  const undislikeMutation = useMutation({
+    mutationFn: (paperId: string) => feedbackApi.undislike(paperId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedback'] });
+    },
+  });
 
   return {
-    useSubmitFeedback,
-    useRemoveFeedback,
+    feedback: feedbackQuery.data ?? { liked: [], disliked: [] }, // Provide default empty arrays
+    isLoading: feedbackQuery.isLoading,
+    isError: feedbackQuery.isError,
+    error: feedbackQuery.error,
+    like: likeMutation.mutate,
+    unlike: unlikeMutation.mutate,
+    dislike: dislikeMutation.mutate,
+    undislike: undislikeMutation.mutate,
   };
 };
