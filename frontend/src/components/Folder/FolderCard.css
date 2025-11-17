@@ -1,15 +1,15 @@
 .folder-card {
-  background: #0f261b;
-  border: 2px solid #2dd4bf;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 1.5rem;
-  margin-bottom: 1rem;
   transition: all 0.2s;
+  box-shadow: 0 1px 3px var(--shadow);
 }
 
 .folder-card:hover {
-  border-color: #14b8a6;
-  box-shadow: 0 4px 12px rgba(45, 212, 191, 0.2);
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 12px var(--shadow-hover);
   transform: translateY(-2px);
 }
 
@@ -21,7 +21,7 @@
 }
 
 .folder-name {
-  color: #e5f2e9;
+  color: var(--text-primary);
   font-size: 1.25rem;
   font-weight: 600;
   text-decoration: none;
@@ -29,14 +29,14 @@
 }
 
 .folder-name:hover {
-  color: #2dd4bf;
+  color: var(--link-color);
 }
 
 .delete-folder-btn {
   background: transparent;
   border: none;
-  color: #ef4444;
-  font-size: 2rem;
+  color: var(--pass-color);
+  font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -50,31 +50,51 @@
 }
 
 .delete-folder-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(217, 83, 79, 0.1);
+  color: var(--remove-color);
   transform: scale(1.1);
 }
 
 .folder-description {
-  color: #a7c8b2;
-  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
   margin-bottom: 0.75rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  transition: color 0.3s ease;
 }
 
 .folder-metadata {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #7ca28a;
-  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  transition: color 0.3s ease;
 }
 
 .paper-count {
-  background: #133322;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  color: #2dd4bf;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  color: var(--text-primary);
   font-weight: 600;
+  font-size: 1rem;
+  box-shadow: 0 1px 3px var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.paper-count:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 6px var(--shadow-hover);
+  transform: translateY(-1px);
+}
+
+.folder-date {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-size: 1rem;
+  transition: color 0.3s ease;
 }
 
 @media (max-width: 768px) {

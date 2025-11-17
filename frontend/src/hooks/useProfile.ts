@@ -13,36 +13,30 @@ export const useProfile = () => {
     });
   };
 
-  // Update research interests
-  const useUpdateInterests = () => {
+  // Update profile (topics and authors)
+  const useUpdateProfile = () => {
     return useMutation({
-      mutationFn: (interests: string[]) => profileApi.updateInterests(interests),
+      mutationFn: ({ topics, authors }: { topics?: string[]; authors?: string[] }) => 
+        profileApi.updateProfile(topics || [], authors || []),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['profile'] });
       },
     });
   };
 
-  // Get liked papers
-  const useLikedPapers = () => {
-    return useQuery({
-      queryKey: ['profile', 'liked-papers'],
-      queryFn: profileApi.getLikedPapers,
-    });
-  };
-
-  // Get disliked papers
-  const useDislikedPapers = () => {
-    return useQuery({
-      queryKey: ['profile', 'disliked-papers'],
-      queryFn: profileApi.getDislikedPapers,
+  // Clear profile
+  const useClearProfile = () => {
+    return useMutation({
+      mutationFn: () => profileApi.clearProfile(),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+      },
     });
   };
 
   return {
     useUserProfile,
-    useUpdateInterests,
-    useLikedPapers,
-    useDislikedPapers,
+    useUpdateProfile,
+    useClearProfile,
   };
 };

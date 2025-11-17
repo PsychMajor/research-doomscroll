@@ -24,3 +24,6 @@ feedback.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Firebase service account key
+firebase-service-account.json

@@ -1,3 +1,5 @@
+import type { Paper } from './paper';
+
 // Folder types matching backend models
 export interface CreateFolderRequest {
   name: string;
@@ -18,6 +20,6 @@ export interface FolderResponse {
   id: string;
   name: string;
   description?: string | null;
-  papers: string[];
-  created_at: string;
+  papers: Paper[]; // Array of full paper objects
+  created_at?: string;
 }

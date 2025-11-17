@@ -1,6 +1,6 @@
 // User types matching backend models
 export interface User {
-  id?: string;
+  id?: string | number;
   email: string;
   name?: string | null;
   picture?: string | null;
@@ -9,10 +9,10 @@ export interface User {
   last_login?: string | null;
 }
 
+// UserProfile matches backend UserProfile model
 export interface UserProfileResponse {
-  user: User;
-  liked_papers: string[];
-  disliked_papers: string[];
+  topics: string[];
+  authors: string[];
   folders: Folder[];
 }
 
@@ -20,6 +20,6 @@ export interface Folder {
   id: string;
   name: string;
   description?: string | null;
-  papers: string[];
-  created_at: string;
+  papers: any[]; // Array of paper objects
+  created_at?: string;
 }

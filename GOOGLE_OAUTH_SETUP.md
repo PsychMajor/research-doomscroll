@@ -1,118 +1,240 @@
 # Google OAuth Setup Guide
 
-Follow these steps to add Google authentication to your Research Doomscroll app:
+This guide will walk you through setting up Google OAuth authentication for Research Doomscroll.
 
-## 1. Create Google OAuth Credentials
+## Step 1: Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Navigate to **APIs & Services** → **Credentials**
-4. Click **Create Credentials** → **OAuth 2.0 Client ID**
-5. If prompted, configure the OAuth consent screen first:
-   - Choose "External" for user type
-   - Fill in the required fields (App name, support email, etc.)
-   - Add your email to test users if in testing mode
-   - Save and continue
+2. Click on the project dropdown at the top
+3. Click **"New Project"**
+4. Enter project name: `Research Doomscroll` (or any name you prefer)
+5. Click **"Create"**
+6. Wait for the project to be created and select it
 
-## 2. Configure OAuth Client
+## Step 2: Enable Google+ API
 
-1. Select **Web application** as the application type
-2. Add **Authorized JavaScript origins**:
-   - `http://localhost:8000` (for local development)
-   - `https://research-doomscroll.onrender.com` (for production)
-3. Add **Authorized redirect URIs**:
-   - `http://localhost:8000/auth/callback`
-   - `https://research-doomscroll.onrender.com/auth/callback`
-4. Click **Create**
-5. Copy the **Client ID** and **Client Secret**
+1. In the Google Cloud Console, go to **"APIs & Services" > "Library"**
+2. Search for **"Google+ API"** or **"Google Identity"**
+3. Click on **"Google+ API"** or **"Google Identity Services API"**
+4. Click **"Enable"**
 
-## 3. Set Environment Variables
+**Note**: Google+ API is being deprecated, but the OAuth 2.0 endpoints still work. Alternatively, you can use:
+- **"Google Identity Services API"** (newer)
+- The OAuth endpoints work with either
 
-### For Local Development:
+## Step 3: Create OAuth 2.0 Credentials
 
-Create a `.env` file in the project root:
+1. Go to **"APIs & Services" > "Credentials"**
+2. Click **"+ CREATE CREDENTIALS"** at the top
+3. Select **"OAuth client ID"**
+4. If prompted, configure the OAuth consent screen first (see Step 4)
+5. Select **"Web application"** as the application type
+6. Give it a name: `Research Doomscroll Web Client`
+
+## Step 4: Configure OAuth Consent Screen
+
+If you haven't configured it yet:
+
+1. Go to **"APIs & Services" > "OAuth consent screen"**
+2. Select **"External"** (unless you have a Google Workspace account)
+3. Click **"Create"**
+4. Fill in the required fields:
+   - **App name**: `Research Doomscroll`
+   - **User support email**: Your email
+   - **Developer contact information**: Your email
+5. Click **"Save and Continue"**
+6. On **"Scopes"** page, click **"Save and Continue"** (we'll use default scopes)
+7. On **"Test users"** page, add your email if using "External" mode
+8. Click **"Save and Continue"**
+9. Review and click **"Back to Dashboard"**
+
+## Step 5: Configure Authorized Redirect URIs
+
+When creating the OAuth client ID (Step 3), you'll see a form. Fill in:
+
+**Authorized JavaScript origins:**
+```
+http://localhost:8000
+http://localhost:5173
+http://127.0.0.1:8000
+http://127.0.0.1:5173
+```
+
+**Authorized redirect URIs:**
+```
+http://localhost:8000/api/auth/callback
+http://127.0.0.1:8000/api/auth/callback
+```
+
+**Important**: 
+- For production, add your production URLs
+- The redirect URI must match exactly what your backend sends
+- Our backend uses: `{base_url}/api/auth/callback`
+
+## Step 6: Get Your Credentials
+
+After creating the OAuth client:
+
+1. You'll see a popup with your **Client ID** and **Client Secret**
+2. **Copy both values** - you'll need them for the `.env` file
+3. If you missed them, go to **"Credentials"** and click on your OAuth client to view them
+
+## Step 7: Create .env File
+
+Create a `.env` file in the project root directory:
 
 ```bash
+# In the project root
+touch .env
+```
+
+Add the following content (replace with your actual values):
+
+```env
+# Google OAuth Credentials
 GOOGLE_CLIENT_ID=your-client-id-here.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret-here
-SECRET_KEY=your-secret-key-here
-DATABASE_URL=your-postgres-url
+
+# Session Secret Key (generate a random string)
+SECRET_KEY=your-secret-key-here-use-python-secrets-token-hex-32
+
+# OpenAlex API (your email for rate limiting)
+OPENALEX_EMAIL=your-email@example.com
+
+# Database (optional - uses in-memory if not set)
+# DATABASE_URL=postgresql://user:password@localhost:5432/research_doomscroll
 ```
 
-Generate a secret key:
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
+## Step 8: Generate Secret Key
 
-### For Render.com Deployment:
-
-1. Go to your Render dashboard
-2. Select your web service
-3. Go to **Environment** tab
-4. Add the following environment variables:
-   - `GOOGLE_CLIENT_ID` = your Google client ID
-   - `GOOGLE_CLIENT_SECRET` = your Google client secret
-   - `SECRET_KEY` = your generated secret key (keep it secret!)
-   - `DATABASE_URL` = (should already be set if you have PostgreSQL)
-
-## 4. Install Required Packages
+Generate a secure secret key for sessions:
 
 ```bash
-pip install authlib httpx itsdangerous
+# Using Python
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Or using OpenSSL
+openssl rand -hex 32
 ```
 
-Or update from requirements.txt:
-```bash
-pip install -r requirements.txt
-```
+Copy the output and use it as your `SECRET_KEY` in the `.env` file.
 
-## 5. Update Database
+## Step 9: Verify Setup
 
-The database schema will be automatically updated when you start the app. It will create:
-- `users` table for storing user profiles
-- Update `profiles` and `feedback` tables with `user_id` foreign keys
-
-## 6. Test the Authentication
-
-1. Start your app:
+1. Make sure your `.env` file is in the project root
+2. Restart your backend server:
    ```bash
-   uvicorn app:app --reload
+   python run.py
    ```
-
-2. Navigate to `http://localhost:8000`
-
-3. Click "Sign in with Google"
-
-4. You should be redirected to Google's login page
-
-5. After successful login, you'll be redirected back to your app
-
-## Security Notes
-
-- Never commit `.env` file or expose your `GOOGLE_CLIENT_SECRET`
-- Use a strong, random `SECRET_KEY` in production
-- Keep the `SECRET_KEY` secure - it protects user sessions
-- In production, ensure your domain is added to authorized origins/redirect URIs
+3. Check the console - you should see "✅ Database initialized"
+4. Visit: http://localhost:8000/docs
+5. Try the `/api/auth/login` endpoint or visit: http://localhost:8000/api/auth/login
 
 ## Troubleshooting
 
 ### "redirect_uri_mismatch" Error
-- Make sure the redirect URI in Google Console exactly matches your app's callback URL
-- Check for trailing slashes and http vs https
 
-### "unauthorized_client" Error
-- Verify your OAuth consent screen is properly configured
-- Add test users if your app is in testing mode
+**Problem**: Google says the redirect URI doesn't match.
 
-### Users Not Being Saved
-- Check that `DATABASE_URL` is set correctly
-- Verify database connectivity
-- Check server logs for error messages
+**Solution**:
+1. Check that your redirect URI in Google Console is exactly: `http://localhost:8000/api/auth/callback`
+2. Make sure you're accessing the backend on `localhost:8000` (not a different port)
+3. If using a different port, update both:
+   - Google Console redirect URI
+   - Backend CORS settings in `backend/main.py`
 
-## Features
+### "invalid_client" Error
 
-Once authentication is set up:
-- Each user gets their own profile and preferences
-- Likes and dislikes are saved per user
-- Data is isolated between users
-- Users can log out and log back in to access their data
+**Problem**: Client ID or secret is incorrect.
+
+**Solution**:
+1. Double-check your `.env` file
+2. Make sure there are no extra spaces or quotes
+3. Restart the backend server after changing `.env`
+
+### OAuth Consent Screen Issues
+
+**Problem**: "This app isn't verified" warning.
+
+**Solution**:
+- For development, this is normal
+- Click "Advanced" > "Go to Research Doomscroll (unsafe)" to proceed
+- For production, you'll need to verify your app with Google
+
+### Session Not Persisting
+
+**Problem**: Login works but session is lost on refresh.
+
+**Solution**:
+1. Check that `SECRET_KEY` is set in `.env`
+2. Make sure cookies are enabled in your browser
+3. Check browser console for CORS errors
+4. Verify `allow_credentials=True` in CORS middleware
+
+## Testing the Auth Flow
+
+1. **Start Backend**:
+   ```bash
+   python run.py
+   ```
+
+2. **Start Frontend**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+3. **Test Login**:
+   - Visit: http://localhost:5173
+   - Click "Login" button
+   - You should be redirected to Google
+   - After authorizing, you'll be redirected back
+   - You should be logged in!
+
+4. **Verify Session**:
+   - Check browser DevTools > Application > Cookies
+   - You should see a session cookie for `localhost:8000`
+   - Visit: http://localhost:8000/api/auth/status
+   - Should return `{"authenticated": true, "user": {...}}`
+
+## Quick Reference
+
+### Environment Variables Needed
+
+```env
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxx
+SECRET_KEY=xxx (32+ character random string)
+OPENALEX_EMAIL=your-email@example.com
+```
+
+### Important URLs
+
+- **Backend**: http://localhost:8000
+- **Frontend**: http://localhost:5173
+- **API Docs**: http://localhost:8000/docs
+- **Login**: http://localhost:8000/api/auth/login
+- **Callback**: http://localhost:8000/api/auth/callback
+- **Status**: http://localhost:8000/api/auth/status
+
+### Google Console Links
+
+- [Google Cloud Console](https://console.cloud.google.com/)
+- [Credentials](https://console.cloud.google.com/apis/credentials)
+- [OAuth Consent Screen](https://console.cloud.google.com/apis/credentials/consent)
+
+## Next Steps
+
+Once authentication is working:
+
+1. ✅ Test login/logout flow
+2. ✅ Test protected endpoints (profile, feedback, etc.)
+3. ✅ Test Phase 1 features:
+   - Search papers
+   - Like papers
+   - View likes page
+   - Get recommendations
+   - Get similar papers
+
+Happy testing! 🎉
+

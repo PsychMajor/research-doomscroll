@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection - users can read/write their own profile
+    match /users/{userId} {
+      allow read: if isOwner(userId) || resource.data.publicProfile == true;
+      allow write: if isOwner(userId);
+      
+      match /profile {
+        allow read: if isOwner(userId) || resource.data.publicProfile == true;
+        allow write: if isOwner(userId);
+        
+        match /data {
+          allow read: if isOwner(userId) || resource.data.publicProfile == true;
+          allow write: if isOwner(userId);
+        }
+      }
+      
+      match /preferences {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /stats {
+        allow read: if isOwner(userId) || resource.data.publicProfile == true;
+        allow write: if false; // Only Cloud Functions can write
+      }
+    }
+    
+    // Feedback collection - users can only access their own feedback
+    match /feedback/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /papers/{paperId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Folders collection - users can access their own folders
+    match /folders/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /user_folders/{folderId} {
+        allow read: if isOwner(userId) || resource.data.isPublic == true;
+        allow write: if isOwner(userId);
+      }
+    }
+    
+    // Papers collection - read-only for all authenticated users
+    match /papers/{paperId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Following collection - users can manage their own following
+    match /following/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /users/{followedUserId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Followers collection - read-only for own followers
+    match /followers/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Only Cloud Functions can write
+      
+      match /users/{followerUserId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+    }
+    
+    // Notifications collection - users can only access their own
+    match /notifications/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /{notificationId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
+

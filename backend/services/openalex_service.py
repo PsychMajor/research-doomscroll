@@ -25,6 +25,8 @@ class OpenAlexService:
         self,
         topics: List[str] = [],
         authors: List[str] = [],
+        years: List[str] = [],
+        institutions: List[str] = [],
         sort_by: str = "recency",
         page: int = 1,
         per_page: int = 200
@@ -35,6 +37,8 @@ class OpenAlexService:
         Args:
             topics: List of topic keywords
             authors: List of author names
+            years: List of year filters (e.g., ["2020"], ["2020-2023"], [">2020"], ["<2023"])
+            institutions: List of institution names
             sort_by: Sort order - "relevance" (citations) or "recency" (newest first)
             page: Page number
             per_page: Number of results per page (max 200)
@@ -94,12 +98,60 @@ class OpenAlexService:
                 else:
                     params["search"] = params["search"] + " " + " ".join(authors)
         
+        # Add year filters
+        if years:
+            year_filters = []
+            for year in years:
+                if "-" in year and not year.startswith(">") and not year.startswith("<"):
+                    # Range: "2020-2023" -> publication_year:2020-2023
+                    filters.append(f"publication_year:{year}")
+                elif year.startswith(">"):
+                    # After: ">2020" -> publication_year:>2020
+                    year_val = year[1:]
+                    filters.append(f"publication_year:>{year_val}")
+                elif year.startswith("<"):
+                    # Before: "<2023" -> publication_year:<2023
+                    year_val = year[1:]
+                    filters.append(f"publication_year:<{year_val}")
+                else:
+                    # Single year: "2020" -> publication_year:2020
+                    # For multiple single years, we'll combine them with OR
+                    year_filters.append(year)
+            
+            # If we have multiple single years, combine them with OR
+            if len(year_filters) > 1:
+                year_filter_str = "|".join(year_filters)
+                filters.append(f"publication_year:{year_filter_str}")
+            elif len(year_filters) == 1:
+                filters.append(f"publication_year:{year_filters[0]}")
+        
+        # Add institution filters
+        if institutions:
+            # For institutions, we'll search by display name since looking up IDs is complex
+            # OpenAlex supports: institutions.display_name.search:MIT
+            inst_filters = []
+            for inst in institutions:
+                # Clean institution name
+                inst_clean = inst.strip()
+                if inst_clean:
+                    inst_filters.append(f'institutions.display_name.search:"{inst_clean}"')
+            
+            if inst_filters:
+                # For multiple institutions, use OR (pipe)
+                if len(inst_filters) == 1:
+                    filters.append(inst_filters[0])
+                else:
+                    # Combine institution names with OR
+                    inst_names = [f.split('"')[1] for f in inst_filters]
+                    inst_filter_str = "|".join(inst_names)
+                    filters.append(f'institutions.display_name.search:"{inst_filter_str}"')
+        
         # Add filters to params (comma means AND in OpenAlex)
         if filters:
             params["filter"] = ",".join(filters)
         
         try:
-            print(f"🔍 Fetching from OpenAlex: page={page}, topics={topics}, authors={authors}, sort={sort_by}")
+            print(f"🔍 Fetching from OpenAlex: page={page}, topics={topics}, authors={authors}, years={years}, institutions={institutions}, sort={sort_by}")
             print(f"   Search: {params.get('search', 'N/A')}")
             print(f"   Filter: {params.get('filter', 'N/A')}")
             
@@ -108,16 +160,22 @@ class OpenAlexService:
                 response.raise_for_status()
                 data = response.json()
             
+            raw_results = data.get("results", [])
+            print(f"   📊 OpenAlex returned {len(raw_results)} raw results")
+            
             papers = []
-            for work in data.get("results", []):
+            for i, work in enumerate(raw_results):
                 if not work or not work.get("id"):
+                    print(f"   ⚠️ Skipping work {i}: missing id")
                     continue
                 
                 paper = self._transform_work_to_paper(work)
                 if paper:
                     papers.append(paper)
+                else:
+                    print(f"   ⚠️ Transformation failed for work {i}: {work.get('id', 'unknown')}")
             
-            print(f"✅ Fetched {len(papers)} papers from OpenAlex")
+            print(f"✅ Fetched {len(papers)} papers from OpenAlex (transformed from {len(raw_results)} raw results)")
             return papers
             
         except httpx.HTTPError as e:
@@ -165,6 +223,94 @@ class OpenAlexService:
         except Exception as e:
             print(f"❌ Error processing OpenAlex paper: {e}")
             return None
+    
+    async def fetch_related_works(self, paper_id: str, limit: int = 10) -> List[Paper]:
+        """
+        Fetch related works for a paper from OpenAlex
+        
+        OpenAlex provides related works in the work object itself via the
+        'related_works' field which contains URLs to related papers.
+        
+        Args:
+            paper_id: OpenAlex paper ID (e.g., "W2104477830")
+            limit: Maximum number of related papers to return
+        
+        Returns:
+            List of Paper models for related works
+        """
+        try:
+            # Clean the ID - extract just the W... part if it's a URL
+            if paper_id.startswith('http'):
+                paper_id = paper_id.split('/')[-1]
+            
+            # Ensure it starts with W
+            if not paper_id.startswith('W'):
+                paper_id = f"W{paper_id}"
+            
+            url = f"{self.BASE_URL}/{paper_id}"
+            params = {
+                "mailto": self.email,
+                "select": "id,related_works"  # Only fetch what we need
+            }
+            
+            print(f"🔗 Fetching related works for paper: {paper_id}")
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                work = response.json()
+            
+            # Get related work IDs from the related_works field
+            related_work_urls = work.get("related_works", [])
+            if not related_work_urls:
+                print(f"   ℹ️  No related works found for {paper_id}")
+                return []
+            
+            # Extract IDs from URLs (format: https://openalex.org/W1234567890)
+            related_ids = []
+            for url in related_work_urls[:limit]:
+                if isinstance(url, str) and '/W' in url:
+                    work_id = url.split('/')[-1]
+                    if work_id.startswith('W'):
+                        related_ids.append(work_id)
+            
+            if not related_ids:
+                print(f"   ℹ️  Could not extract related work IDs")
+                return []
+            
+            print(f"   ✅ Found {len(related_ids)} related work IDs, fetching details...")
+            
+            # Fetch full details for each related work
+            papers = []
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for work_id in related_ids:
+                    try:
+                        work_url = f"{self.BASE_URL}/{work_id}"
+                        work_params = {
+                            "mailto": self.email,
+                            "select": "id,title,abstract_inverted_index,primary_location,doi,publication_year,cited_by_count,authorships"
+                        }
+                        
+                        work_response = await client.get(work_url, params=work_params)
+                        work_response.raise_for_status()
+                        related_work = work_response.json()
+                        
+                        paper = self._transform_work_to_paper(related_work)
+                        if paper:
+                            papers.append(paper)
+                    except Exception as e:
+                        print(f"   ⚠️  Error fetching related work {work_id}: {e}")
+                        continue
+            
+            print(f"✅ Fetched {len(papers)} related papers")
+            return papers
+            
+        except httpx.HTTPError as e:
+            print(f"❌ OpenAlex API error fetching related works: {e}")
+            return []
+        except Exception as e:
+            print(f"❌ Error fetching related works: {e}")
+            return []
     
     async def _get_author_ids(self, author_names: List[str]) -> List[str]:
         """

@@ -17,6 +17,7 @@ def format_scientific_text(text: Optional[str]) -> Optional[str]:
         β2 -> β<sub>2</sub>
         10^6 -> 10<sup>6</sup>
         CO2 -> CO<sub>2</sub>
+        H2O -> H<sub>2</sub>O
     
     Args:
         text: Input text with scientific notation
@@ -27,14 +28,35 @@ def format_scientific_text(text: Optional[str]) -> Optional[str]:
     if not text:
         return text
     
-    # Convert subscripts (e.g., β2, H2O, CO2)
-    # Pattern: letter followed by digit(s)
-    text = re.sub(r'([A-Za-zα-ωΑ-Ω])(\d+)', r'\1<sub>\2</sub>', text)
-    
-    # Convert superscripts (e.g., 10^6, x^2)
+    # Convert superscripts first (e.g., 10^6, x^2)
     # Pattern: ^digit or ^{digits}
     text = re.sub(r'\^(\d+)', r'<sup>\1</sup>', text)
     text = re.sub(r'\^\{([^}]+)\}', r'<sup>\1</sup>', text)
+    
+    # Convert subscripts more carefully - only for:
+    # 1. Greek letters followed by digits (β2, α1, etc.)
+    # 2. Chemical formulas: single uppercase letter + 1-2 digits + uppercase letter (H2O, CO2)
+    # 3. Chemical formulas: single uppercase letter + 1-2 digits + end of word (N2, O2)
+    
+    # Greek letters with digits (β2, α1, γ3, etc.)
+    text = re.sub(r'([α-ωΑ-Ω])(\d+)', r'\1<sub>\2</sub>', text)
+    
+    # Chemical formulas: Handle common patterns:
+    # 1. Letter(s) + digits + letter (H2O, N2O) - digits in middle
+    # 2. Letter(s) + digits at end (CO2, N2, O2) - digits at end
+    # 
+    # This matches: H2O, CO2, N2, O2, N2O, etc.
+    # Does NOT match: Gpr85, GPCR, cell2, etc. (longer words with mixed case)
+    
+    # Pattern 1: One or more uppercase letters + digits + uppercase letter (H2O, N2O)
+    # This handles formulas where digits are in the middle
+    text = re.sub(r'\b([A-Z]+)(\d{1,2})([A-Z])', r'\1<sub>\2</sub>\3', text)
+    
+    # Pattern 2: One or more uppercase letters + digits at end of word
+    # But only if the word is short (2-4 chars total) to avoid matching gene names
+    # This handles: CO2, N2, O2 (short chemical formulas)
+    # Does NOT handle: Gpr85 (too long), GPCR85 (too long)
+    text = re.sub(r'\b([A-Z]{1,2})(\d{1,2})\b(?![a-z])', r'\1<sub>\2</sub>', text)
     
     return text
 

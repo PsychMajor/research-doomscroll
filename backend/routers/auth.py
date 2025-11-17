@@ -12,16 +12,19 @@ from typing import Dict, Optional
 import os
 
 from ..services.database_service import DatabaseService
+from ..services.unified_database_service import UnifiedDatabaseService, get_unified_db_service
 from ..dependencies import get_db_service, get_current_user
+from ..config import get_settings
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
-# Configure OAuth (same as legacy app.py)
+# Configure OAuth using Settings
+settings = get_settings()
 oauth = OAuth()
 oauth.register(
     name='google',
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    client_id=settings.google_client_id,
+    client_secret=settings.google_client_secret,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
@@ -39,14 +42,17 @@ async def login(request: Request):
         RedirectResponse to Google OAuth
     """
     # Build callback URL dynamically based on request
-    redirect_uri = request.url_for('auth_callback')
+    # For APIRouter, we need to construct the full URL
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/api/auth/callback"
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/callback")
+@router.get("/callback", name="auth_callback")
 async def auth_callback(
     request: Request,
-    db: DatabaseService = Depends(get_db_service)
+    db: DatabaseService = Depends(get_db_service),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Handle OAuth callback from Google.
@@ -57,7 +63,8 @@ async def auth_callback(
     
     Args:
         request: FastAPI request with OAuth code in query params
-        db: Database service dependency
+        db: Database service dependency (legacy PostgreSQL)
+        unified_db: Unified database service (PostgreSQL or Firebase)
     
     Returns:
         RedirectResponse to homepage with user logged in
@@ -76,33 +83,51 @@ async def auth_callback(
                 detail="Failed to retrieve user information from Google"
             )
         
-        # Create or update user in database
-        db_user_id = await db.create_or_update_user(
+        # Get Google UID (sub claim)
+        google_uid = user_info.get('sub')
+        
+        # Create or update user in unified database
+        # This will use Firebase if enabled, otherwise PostgreSQL
+        user_id = await unified_db.create_or_update_user(
             email=user_info['email'],
             name=user_info.get('name', ''),
-            picture_url=user_info.get('picture', '')
+            picture_url=user_info.get('picture', ''),
+            google_uid=google_uid
         )
         
+        # Also update legacy PostgreSQL for backward compatibility
+        if not settings.use_firebase:
+            db_user_id = await db.create_or_update_user(
+                email=user_info['email'],
+                name=user_info.get('name', ''),
+                picture_url=user_info.get('picture', '')
+            )
+            user_id = str(db_user_id) if db_user_id else user_id
+        
         # Store user in session
-        # Use database user_id if available, fallback to Google sub ID
+        # Use Google UID for Firebase, database ID for PostgreSQL
         request.session['user'] = {
-            'id': db_user_id if db_user_id else user_info['sub'],
+            'id': user_id if user_id else google_uid,
+            'google_uid': google_uid,  # Store Google UID separately
             'email': user_info['email'],
             'name': user_info.get('name', ''),
             'picture': user_info.get('picture', '')
         }
         
-        print(f"✅ User logged in: {user_info['email']} (DB ID: {db_user_id})")
+        print(f"✅ User logged in: {user_info['email']} (ID: {user_id}, Google UID: {google_uid})")
         
     except Exception as e:
         print(f"❌ OAuth error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Authentication failed: {str(e)}"
         )
     
-    # Redirect to homepage after successful login
-    return RedirectResponse(url='/')
+    # Redirect to frontend homepage after successful login
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+    return RedirectResponse(url=f"{frontend_url}/")
 
 
 @router.get("/logout")
@@ -117,11 +142,15 @@ async def logout(request: Request):
         RedirectResponse to homepage
     """
     user_email = request.session.get('user', {}).get('email', 'Unknown')
-    request.session.pop('user', None)
+    
+    # Clear the entire session to prevent OAuth state mismatches
+    request.session.clear()
     
     print(f"👋 User logged out: {user_email}")
     
-    return RedirectResponse(url='/')
+    # Redirect to frontend homepage after logout
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+    return RedirectResponse(url=f"{frontend_url}/")
 
 
 @router.get("/me")

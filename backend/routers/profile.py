@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from ..models.user import UserProfile
 from ..services.database_service import DatabaseService
+from ..services.unified_database_service import UnifiedDatabaseService, get_unified_db_service
 from ..dependencies import get_db_service, require_user_id
 
 
@@ -16,8 +17,8 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 @router.get("", response_model=UserProfile)
 async def get_profile(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Get current user's profile
@@ -36,7 +37,7 @@ async def get_profile(
     ```
     """
     try:
-        profile = await db.load_profile(user_id=user_id)
+        profile = await unified_db.load_profile(user_id)
         return profile
     except Exception as e:
         print(f"❌ Error loading profile: {e}")
@@ -50,8 +51,8 @@ async def get_profile(
 async def update_profile(
     topics: List[str] = [],
     authors: List[str] = [],
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Update user's profile (topics and authors)
@@ -76,7 +77,7 @@ async def update_profile(
     ```
     """
     try:
-        await db.save_profile(topics, authors, user_id=user_id)
+        await unified_db.save_profile(user_id, topics, authors)
         return {
             "status": "success",
             "message": "Profile updated successfully",
@@ -93,8 +94,8 @@ async def update_profile(
 
 @router.delete("", response_model=dict)
 async def clear_profile(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Clear user's profile (topics and authors)
@@ -111,7 +112,7 @@ async def clear_profile(
     ```
     """
     try:
-        await db.save_profile([], [], user_id=user_id)
+        await unified_db.save_profile(user_id, [], [])
         return {
             "status": "success",
             "message": "Profile cleared successfully"

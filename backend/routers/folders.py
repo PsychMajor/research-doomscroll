@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from ..models.folder import Folder, FolderCreate, FolderUpdate, AddPaperToFolder
 from ..models.paper import Paper
 from ..services.database_service import DatabaseService
+from ..services.unified_database_service import UnifiedDatabaseService, get_unified_db_service
 from ..dependencies import get_db_service, require_user_id
 import uuid
 
@@ -19,8 +20,8 @@ router = APIRouter(prefix="/api/folders", tags=["folders"])
 
 @router.get("", response_model=List[Folder])
 async def get_folders(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Get all user's folders
@@ -36,14 +37,34 @@ async def get_folders(
     ```
     """
     try:
-        profile = await db.load_profile(user_id=user_id)
+        profile = await unified_db.load_profile(user_id)
         folders = profile.folders
+        
+        # Ensure Likes folder is always present
+        likes_folder_exists = any(f.get('id') == 'likes' for f in folders)
+        if not likes_folder_exists:
+            # Create Likes folder if it doesn't exist
+            likes_folder = {
+                'id': 'likes',
+                'name': 'Likes',
+                'description': 'Papers you have liked',
+                'papers': [],
+                'created_at': None,
+            }
+            folders.insert(0, likes_folder)
+            print(f"✅ Added Likes folder to folders list for user {user_id}")
+        
+        # Ensure Likes folder is always first
+        likes_folder = next((f for f in folders if f.get('id') == 'likes'), None)
+        if likes_folder:
+            folders = [likes_folder] + [f for f in folders if f.get('id') != 'likes']
         
         # Convert to Folder models
         folder_models = []
         for folder_dict in folders:
             folder_models.append(Folder(**folder_dict))
         
+        print(f"✅ Returning {len(folder_models)} folders (including Likes) for user {user_id}")
         return folder_models
     except Exception as e:
         print(f"❌ Error loading folders: {e}")
@@ -56,8 +77,8 @@ async def get_folders(
 @router.post("", response_model=Folder)
 async def create_folder(
     folder: FolderCreate,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Create a new folder
@@ -79,28 +100,36 @@ async def create_folder(
     ```
     """
     try:
-        # Load current folders
-        profile = await db.load_profile(user_id=user_id)
-        folders = profile.folders
-        
         # Generate unique ID for new folder
         new_folder_id = str(uuid.uuid4())
         
-        # Create new folder
-        new_folder = {
-            "id": new_folder_id,
-            "name": folder.name,
-            "papers": []
-        }
-        
-        folders.append(new_folder)
-        
-        # Save updated folders
-        await db.save_folders(folders, user_id=user_id)
+        # Create folder using unified service
+        description = getattr(folder, 'description', None)
+        if unified_db.use_firebase and unified_db.firebase_service:
+            await unified_db.firebase_service.create_folder(
+                user_id, new_folder_id, folder.name, description
+            )
+        else:
+            # Use PostgreSQL
+            profile = await unified_db.load_profile(user_id)
+            folders = profile.folders
+            
+            new_folder = {
+                "id": new_folder_id,
+                "name": folder.name,
+                "description": description,
+                "papers": []
+            }
+            
+            folders.append(new_folder)
+            
+            # Save updated folders
+            if unified_db.postgres_service:
+                await unified_db.postgres_service.save_folders(folders, user_id=int(user_id))
         
         print(f"📁 Created folder: {folder.name} (ID: {new_folder_id})")
         
-        return Folder(**new_folder)
+        return Folder(id=new_folder_id, name=folder.name, description=description, papers=[])
     except Exception as e:
         print(f"❌ Error creating folder: {e}")
         raise HTTPException(
@@ -112,8 +141,8 @@ async def create_folder(
 @router.get("/{folder_id}", response_model=Folder)
 async def get_folder(
     folder_id: str,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Get a specific folder by ID
@@ -132,17 +161,39 @@ async def get_folder(
     ```
     """
     try:
-        profile = await db.load_profile(user_id=user_id)
+        # For Likes folder, always ensure it exists first
+        if folder_id.lower() == 'likes':
+            if unified_db.use_firebase and unified_db.firebase_service:
+                await unified_db.firebase_service._ensure_likes_folder_exists(user_id)
+        
+        profile = await unified_db.load_profile(user_id)
         folders = profile.folders
         
         # Find the folder
         folder_dict = next((f for f in folders if f['id'] == folder_id), None)
+        
+        # If not found and it's the Likes folder, create it
+        if not folder_dict and folder_id.lower() == 'likes':
+            folder_dict = {
+                'id': 'likes',
+                'name': 'Likes',
+                'description': 'Papers you have liked',
+                'papers': [],
+                'created_at': None,
+            }
+            print(f"✅ Created Likes folder on-the-fly for user {user_id}")
         
         if not folder_dict:
             raise HTTPException(
                 status_code=404,
                 detail=f"Folder with ID '{folder_id}' not found"
             )
+        
+        # For Firebase, load full paper details
+        if unified_db.use_firebase and unified_db.firebase_service:
+            folder_data = await unified_db.firebase_service.get_folder(user_id, folder_id)
+            if folder_data:
+                folder_dict = folder_data
         
         return Folder(**folder_dict)
     except HTTPException:
@@ -159,8 +210,8 @@ async def get_folder(
 async def update_folder(
     folder_id: str,
     folder_update: FolderUpdate,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Update a folder's name
@@ -192,7 +243,7 @@ async def update_folder(
                 detail="Cannot rename the 'Likes' folder"
             )
         
-        profile = await db.load_profile(user_id=user_id)
+        profile = await unified_db.load_profile(user_id)
         folders = profile.folders
         
         # Find and update the folder
@@ -210,7 +261,17 @@ async def update_folder(
             )
         
         # Save updated folders
-        await db.save_folders(folders, user_id=user_id)
+        if unified_db.use_firebase and unified_db.firebase_service:
+            # For Firebase, update the folder document
+            folder_ref = unified_db.firebase_service.db.collection('folders').document(user_id).collection('user_folders').document(folder_id)
+            folder_ref.update({
+                'name': folder_update.name,
+                'updatedAt': unified_db.firebase_service._get_timestamp(),
+            })
+        else:
+            # Use PostgreSQL
+            if unified_db.postgres_service:
+                await unified_db.postgres_service.save_folders(folders, user_id=int(user_id))
         
         print(f"✏️  Updated folder {folder_id}: {folder_update.name}")
         
@@ -230,8 +291,8 @@ async def update_folder(
 @router.delete("/{folder_id}", response_model=dict)
 async def delete_folder(
     folder_id: str,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Delete a folder
@@ -258,7 +319,7 @@ async def delete_folder(
                 detail="Cannot delete the 'Likes' folder"
             )
         
-        profile = await db.load_profile(user_id=user_id)
+        profile = await unified_db.load_profile(user_id)
         folders = profile.folders
         
         # Filter out the folder to delete
@@ -272,7 +333,14 @@ async def delete_folder(
             )
         
         # Save updated folders
-        await db.save_folders(folders, user_id=user_id)
+        if unified_db.use_firebase and unified_db.firebase_service:
+            # For Firebase, delete the folder document
+            folder_ref = unified_db.firebase_service.db.collection('folders').document(user_id).collection('user_folders').document(folder_id)
+            folder_ref.delete()
+        else:
+            # Use PostgreSQL
+            if unified_db.postgres_service:
+                await unified_db.postgres_service.save_folders(folders, user_id=int(user_id))
         
         print(f"🗑️  Deleted folder: {folder_id}")
         
@@ -296,8 +364,8 @@ async def add_paper_to_folder(
     folder_id: str,
     paper_id: str = Body(...),
     paper_data: Paper = Body(...),
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Add a paper to a folder
@@ -325,44 +393,55 @@ async def add_paper_to_folder(
     ```
     """
     try:
-        # Load user's folders
-        profile = await db.load_profile(user_id=user_id)
-        folders = profile.folders
-        
-        # Find the target folder
-        folder_found = False
-        for folder in folders:
-            if folder['id'] == folder_id:
-                # Ensure papers array exists
-                if 'papers' not in folder:
-                    folder['papers'] = []
+        # Use unified service to add paper to folder
+        if unified_db.use_firebase and unified_db.firebase_service:
+            # Cache paper first
+            await unified_db.firebase_service.cache_paper(paper_data)
+            # Add to folder
+            await unified_db.firebase_service.add_paper_to_folder(user_id, folder_id, paper_id)
+            # If adding to "likes" folder, also record as a like
+            if folder_id.lower() == 'likes':
+                await unified_db.firebase_service.save_feedback(user_id, paper_id, "liked", paper_data)
+                print(f"❤️  Also recorded paper {paper_id} as liked")
+        else:
+            # Use PostgreSQL
+            profile = await unified_db.load_profile(user_id)
+            folders = profile.folders
+            
+            # Find the target folder
+            folder_found = False
+            for folder in folders:
+                if folder['id'] == folder_id:
+                    # Ensure papers array exists
+                    if 'papers' not in folder:
+                        folder['papers'] = []
+                    
+                    # Check if paper already exists
+                    if not any(p.get('paperId') == paper_id for p in folder['papers']):
+                        folder['papers'].append(paper_data.model_dump())
+                        folder_found = True
+                        print(f"📁 Added paper {paper_id} to folder {folder_id}")
+                    else:
+                        print(f"ℹ️  Paper {paper_id} already in folder {folder_id}")
+                        folder_found = True
+                    break
+            
+            if not folder_found:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Folder with ID '{folder_id}' not found"
+                )
+            
+            # Save updated folders
+            if unified_db.postgres_service:
+                await unified_db.postgres_service.save_folders(folders, user_id=int(user_id))
+                # Cache paper metadata
+                await unified_db.postgres_service.save_paper(paper_data)
                 
-                # Check if paper already exists
-                if not any(p.get('paperId') == paper_id for p in folder['papers']):
-                    folder['papers'].append(paper_data.model_dump())
-                    folder_found = True
-                    print(f"📁 Added paper {paper_id} to folder {folder_id}")
-                else:
-                    print(f"ℹ️  Paper {paper_id} already in folder {folder_id}")
-                    folder_found = True
-                break
-        
-        if not folder_found:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Folder with ID '{folder_id}' not found"
-            )
-        
-        # Save updated folders
-        await db.save_folders(folders, user_id=user_id)
-        
-        # Cache paper metadata
-        await db.save_paper(paper_data)
-        
-        # If adding to "likes" folder, also record as a like
-        if folder_id.lower() == 'likes':
-            await db.save_feedback(paper_id, "liked", user_id=user_id)
-            print(f"❤️  Also recorded paper {paper_id} as liked")
+                # If adding to "likes" folder, also record as a like
+                if folder_id.lower() == 'likes':
+                    await unified_db.postgres_service.save_feedback(paper_id, "liked", user_id=int(user_id))
+                    print(f"❤️  Also recorded paper {paper_id} as liked")
         
         return {
             "status": "success",
@@ -384,8 +463,8 @@ async def add_paper_to_folder(
 async def remove_paper_from_folder(
     folder_id: str,
     paper_id: str,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Remove a paper from a folder
@@ -406,39 +485,48 @@ async def remove_paper_from_folder(
     ```
     """
     try:
-        # Load user's folders
-        profile = await db.load_profile(user_id=user_id)
-        folders = profile.folders
-        
-        # Find the target folder and remove paper
-        folder_found = False
-        for folder in folders:
-            if folder['id'] == folder_id:
-                if 'papers' in folder:
-                    initial_count = len(folder['papers'])
-                    folder['papers'] = [p for p in folder['papers'] if p.get('paperId') != paper_id]
+        # Use unified service to remove paper from folder
+        if unified_db.use_firebase and unified_db.firebase_service:
+            await unified_db.firebase_service.remove_paper_from_folder(user_id, folder_id, paper_id)
+            # If removing from "likes" folder, also unlike it
+            if folder_id.lower() == 'likes':
+                await unified_db.firebase_service.delete_feedback(user_id, paper_id)
+                print(f"💔 Also unliked paper {paper_id}")
+        else:
+            # Use PostgreSQL
+            profile = await unified_db.load_profile(user_id)
+            folders = profile.folders
+            
+            # Find the target folder and remove paper
+            folder_found = False
+            for folder in folders:
+                if folder['id'] == folder_id:
+                    if 'papers' in folder:
+                        initial_count = len(folder['papers'])
+                        folder['papers'] = [p for p in folder['papers'] if p.get('paperId') != paper_id]
+                        
+                        if len(folder['papers']) < initial_count:
+                            print(f"🗑️  Removed paper {paper_id} from folder {folder_id}")
+                        else:
+                            print(f"ℹ️  Paper {paper_id} not found in folder {folder_id}")
                     
-                    if len(folder['papers']) < initial_count:
-                        print(f"🗑️  Removed paper {paper_id} from folder {folder_id}")
-                    else:
-                        print(f"ℹ️  Paper {paper_id} not found in folder {folder_id}")
-                    
-                folder_found = True
-                break
-        
-        if not folder_found:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Folder with ID '{folder_id}' not found"
-            )
-        
-        # Save updated folders
-        await db.save_folders(folders, user_id=user_id)
-        
-        # If removing from "likes" folder, also unlike it
-        if folder_id.lower() == 'likes':
-            await db.delete_feedback(paper_id, user_id=user_id)
-            print(f"💔 Also unliked paper {paper_id}")
+                    folder_found = True
+                    break
+            
+            if not folder_found:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Folder with ID '{folder_id}' not found"
+                )
+            
+            # Save updated folders
+            if unified_db.postgres_service:
+                await unified_db.postgres_service.save_folders(folders, user_id=int(user_id))
+                
+                # If removing from "likes" folder, also unlike it
+                if folder_id.lower() == 'likes':
+                    await unified_db.postgres_service.delete_feedback(paper_id, user_id=int(user_id))
+                    print(f"💔 Also unliked paper {paper_id}")
         
         return {
             "status": "success",

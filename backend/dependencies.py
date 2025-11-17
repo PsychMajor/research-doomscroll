@@ -7,6 +7,7 @@ Shared dependencies for authentication, database access, and service injection.
 from typing import Optional, Dict, Any
 from fastapi import Request, Depends, HTTPException, status
 from .services.database_service import DatabaseService
+from .services.unified_database_service import UnifiedDatabaseService, get_unified_db_service
 from .services.openalex_service import OpenAlexService
 
 
@@ -93,42 +94,60 @@ def get_authenticated_user(request: Request) -> Dict[str, Any]:
     return user
 
 
-def get_user_id(request: Request) -> Optional[int]:
+def get_user_id(request: Request) -> Optional[str]:
     """
     Get user ID from session
     
-    Returns user_id (int) if logged in, None if anonymous.
+    Returns user_id (string) if logged in, None if anonymous.
+    For Firebase, this is Google UID. For PostgreSQL, this is converted to string.
     Useful for optional authentication scenarios.
     
     Args:
         request: FastAPI request object with session
     
     Returns:
-        User ID (int) or None if anonymous
+        User ID (string) or None if anonymous
     """
     user = request.session.get('user')
     if user and user.get('id') != 'anonymous':
         user_id = user.get('id')
-        # Handle both string and int IDs
-        if isinstance(user_id, str) and user_id.isdigit():
-            return int(user_id)
-        elif isinstance(user_id, int):
-            return user_id
+        # Return as string (works for both Firebase UIDs and PostgreSQL IDs)
+        return str(user_id) if user_id else None
     return None
 
 
-def require_user_id(request: Request) -> int:
+def get_google_uid(request: Request) -> Optional[str]:
     """
-    Get user ID from session (required)
+    Get Google UID from session (for Firebase)
     
-    Raises 401 if user is not logged in.
-    Use this for endpoints that require user ID.
+    Returns Google UID if available, otherwise falls back to user ID.
     
     Args:
         request: FastAPI request object with session
     
     Returns:
-        User ID (int)
+        Google UID (string) or None if anonymous
+    """
+    user = request.session.get('user')
+    if user and user.get('id') != 'anonymous':
+        # Prefer google_uid if available, otherwise use id
+        return user.get('google_uid') or str(user.get('id'))
+    return None
+
+
+def require_user_id(request: Request) -> str:
+    """
+    Get user ID from session (required)
+    
+    Raises 401 if user is not logged in.
+    Use this for endpoints that require user ID.
+    Returns string ID (works for both Firebase UIDs and PostgreSQL IDs).
+    
+    Args:
+        request: FastAPI request object with session
+    
+    Returns:
+        User ID (string)
     
     Raises:
         HTTPException: 401 if user not authenticated

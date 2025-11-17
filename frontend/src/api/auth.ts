@@ -2,19 +2,19 @@ import apiClient from './client';
 
 export const authApi = {
   // Check authentication status
-  checkAuth: async (): Promise<{ authenticated: boolean }> => {
-    const { data } = await apiClient.get('/auth/status');
+  checkAuth: async (): Promise<{ authenticated: boolean; user?: any }> => {
+    const { data } = await apiClient.get('/api/auth/status');
     return data;
   },
 
   // Login (redirects to Google OAuth)
   login: () => {
-    window.location.href = '/login';
+    window.location.href = '/api/auth/login';
   },
 
   // Logout
   logout: async (): Promise<void> => {
-    await apiClient.post('/logout');
+    await apiClient.get('/api/auth/logout');
     window.location.href = '/';
   },
 };

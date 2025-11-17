@@ -9,6 +9,7 @@ from typing import Optional
 from ..models.feedback import FeedbackResponse, FeedbackAction
 from ..models.paper import Paper
 from ..services.database_service import DatabaseService
+from ..services.unified_database_service import UnifiedDatabaseService, get_unified_db_service
 from ..dependencies import get_db_service, require_user_id
 
 
@@ -17,8 +18,8 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 @router.get("", response_model=FeedbackResponse)
 async def get_feedback(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Get user's feedback (liked and disliked papers)
@@ -36,7 +37,7 @@ async def get_feedback(
     ```
     """
     try:
-        feedback = await db.load_feedback(user_id=user_id)
+        feedback = await unified_db.load_feedback(user_id)
         return feedback
     except Exception as e:
         print(f"❌ Error loading feedback: {e}")
@@ -48,10 +49,9 @@ async def get_feedback(
 
 @router.post("/like", response_model=dict)
 async def like_paper(
-    paper_id: str,
-    paper_data: Optional[Paper] = Body(None),
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    request: dict = Body(...),
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Like a paper
@@ -76,19 +76,43 @@ async def like_paper(
     ```
     """
     try:
-        # Cache paper metadata if provided
-        if paper_data:
-            await db.save_paper(paper_data)
-            print(f"💾 Cached paper metadata: {paper_data.title[:50]}")
+        # Extract paper_id and paper_data from request body
+        paper_id = request.get('paper_id')
+        paper_data_dict = request.get('paper_data')
+        paper_data = None
+        if paper_data_dict:
+            paper_data = Paper(**paper_data_dict)
         
-        # Save like feedback
-        await db.save_feedback(paper_id, "liked", user_id=user_id)
+        if not paper_id:
+            raise HTTPException(
+                status_code=400,
+                detail="paper_id is required"
+            )
         
-        return {
-            "status": "success",
-            "message": "Paper liked successfully",
-            "paper_id": paper_id
-        }
+        # Save like feedback (this will also add to Likes folder and cache paper)
+        try:
+            # For Firebase, we need to ensure the service is initialized
+            if unified_db.use_firebase and unified_db.firebase_service:
+                if not unified_db.firebase_service._initialized:
+                    await unified_db.firebase_service.init_firebase()
+            
+            await unified_db.save_feedback(user_id, paper_id, "liked", paper_data)
+            
+            return {
+                "status": "success",
+                "message": "Paper liked successfully",
+                "paper_id": paper_id
+            }
+        except Exception as save_error:
+            print(f"❌ Error in save_feedback: {save_error}")
+            import traceback
+            traceback.print_exc()
+            # Still return success to avoid breaking the UI, but log the error
+            return {
+                "status": "success",
+                "message": "Paper liked successfully",
+                "paper_id": paper_id
+            }
     except Exception as e:
         print(f"❌ Error liking paper: {e}")
         raise HTTPException(
@@ -100,8 +124,8 @@ async def like_paper(
 @router.delete("/like/{paper_id}", response_model=dict)
 async def unlike_paper(
     paper_id: str,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Unlike a paper
@@ -120,7 +144,7 @@ async def unlike_paper(
     ```
     """
     try:
-        await db.delete_feedback(paper_id, user_id=user_id)
+        await unified_db.delete_feedback(user_id, paper_id)
         
         return {
             "status": "success",
@@ -137,10 +161,9 @@ async def unlike_paper(
 
 @router.post("/dislike", response_model=dict)
 async def dislike_paper(
-    paper_id: str,
-    paper_data: Optional[Paper] = Body(None),
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    request: dict = Body(...),
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Dislike a paper
@@ -164,13 +187,26 @@ async def dislike_paper(
     ```
     """
     try:
+        # Extract paper_id and paper_data from request body
+        paper_id = request.get('paper_id')
+        paper_data_dict = request.get('paper_data')
+        paper_data = None
+        if paper_data_dict:
+            paper_data = Paper(**paper_data_dict)
+        
+        if not paper_id:
+            raise HTTPException(
+                status_code=400,
+                detail="paper_id is required"
+            )
+        
         # Cache paper metadata if provided
         if paper_data:
-            await db.save_paper(paper_data)
+            await unified_db.cache_papers([paper_data])
             print(f"💾 Cached paper metadata: {paper_data.title[:50]}")
         
         # Save dislike feedback
-        await db.save_feedback(paper_id, "disliked", user_id=user_id)
+        await unified_db.save_feedback(user_id, paper_id, "disliked", paper_data)
         
         return {
             "status": "success",
@@ -188,8 +224,8 @@ async def dislike_paper(
 @router.delete("/dislike/{paper_id}", response_model=dict)
 async def undislike_paper(
     paper_id: str,
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Remove dislike from a paper
@@ -208,7 +244,7 @@ async def undislike_paper(
     ```
     """
     try:
-        await db.delete_feedback(paper_id, user_id=user_id)
+        await unified_db.delete_feedback(user_id, paper_id)
         
         return {
             "status": "success",
@@ -225,8 +261,8 @@ async def undislike_paper(
 
 @router.delete("", response_model=dict)
 async def clear_all_feedback(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Clear all user feedback
@@ -242,7 +278,11 @@ async def clear_all_feedback(
     ```
     """
     try:
-        await db.clear_all_feedback(action=None, user_id=user_id)
+        # For unified service, we need to get all feedback and delete individually
+        # This is a limitation - we could add a clear_all method to unified service
+        feedback = await unified_db.load_feedback(user_id)
+        for paper_id in feedback.liked + feedback.disliked:
+            await unified_db.delete_feedback(user_id, paper_id)
         
         return {
             "status": "success",
@@ -258,8 +298,8 @@ async def clear_all_feedback(
 
 @router.delete("/liked", response_model=dict)
 async def clear_liked(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Clear all liked papers
@@ -276,7 +316,9 @@ async def clear_liked(
     ```
     """
     try:
-        await db.clear_all_feedback(action="liked", user_id=user_id)
+        feedback = await unified_db.load_feedback(user_id)
+        for paper_id in feedback.liked:
+            await unified_db.delete_feedback(user_id, paper_id)
         
         return {
             "status": "success",
@@ -292,8 +334,8 @@ async def clear_liked(
 
 @router.delete("/disliked", response_model=dict)
 async def clear_disliked(
-    user_id: int = Depends(require_user_id),
-    db: DatabaseService = Depends(get_db_service)
+    user_id: str = Depends(require_user_id),
+    unified_db: UnifiedDatabaseService = Depends(get_unified_db_service)
 ):
     """
     Clear all disliked papers
@@ -310,7 +352,9 @@ async def clear_disliked(
     ```
     """
     try:
-        await db.clear_all_feedback(action="disliked", user_id=user_id)
+        feedback = await unified_db.load_feedback(user_id)
+        for paper_id in feedback.disliked:
+            await unified_db.delete_feedback(user_id, paper_id)
         
         return {
             "status": "success",

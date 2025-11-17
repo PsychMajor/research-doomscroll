@@ -8,8 +8,8 @@
 }
 
 .spinner {
-  border: 3px solid rgba(79, 175, 80, 0.1);
-  border-top: 3px solid #4ade80;
+  border: 3px solid rgba(107, 142, 90, 0.1);
+  border-top: 3px solid #6b8e5a;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -33,8 +33,8 @@
 }
 
 .loading-text {
-  color: #a7c8b2;
-  font-size: 1rem;
+  color: #6b5d4f;
+  font-size: 1.1rem;
   margin: 0;
 }
 

@@ -6,34 +6,45 @@ import type {
   FolderResponse,
 } from '../types/folder';
 
+import type { Paper } from '../types/paper';
+
 export const foldersApi = {
+  // Get all folders
+  getAll: async (): Promise<FolderResponse[]> => {
+    const { data } = await apiClient.get('/api/folders');
+    return data;
+  },
+
   // Create a new folder
   create: async (folder: CreateFolderRequest): Promise<FolderResponse> => {
-    const { data } = await apiClient.post('/folders', folder);
+    const { data } = await apiClient.post('/api/folders', folder);
     return data;
   },
 
   // Get folder by ID
   getById: async (folderId: string): Promise<FolderResponse> => {
-    const { data } = await apiClient.get(`/folders/${folderId}`);
+    const { data } = await apiClient.get(`/api/folders/${folderId}`);
     return data;
   },
 
   // Delete folder
   delete: async (folderId: string): Promise<{ status: string }> => {
-    const { data } = await apiClient.delete(`/folders/${folderId}`);
+    const { data } = await apiClient.delete(`/api/folders/${folderId}`);
     return data;
   },
 
   // Add paper to folder
-  addPaper: async (request: AddPaperToFolderRequest): Promise<{ status: string }> => {
-    const { data } = await apiClient.post('/folders/add-paper', request);
+  addPaper: async (folderId: string, paperId: string, paperData: Paper): Promise<{ status: string }> => {
+    const { data } = await apiClient.post(`/api/folders/${folderId}/papers`, {
+      paper_id: paperId,
+      paper_data: paperData,
+    });
     return data;
   },
 
   // Remove paper from folder
-  removePaper: async (request: RemovePaperFromFolderRequest): Promise<{ status: string }> => {
-    const { data } = await apiClient.post('/folders/remove-paper', request);
+  removePaper: async (folderId: string, paperId: string): Promise<{ status: string }> => {
+    const { data } = await apiClient.delete(`/api/folders/${folderId}/papers/${paperId}`);
     return data;
   },
 };

@@ -80,6 +80,8 @@ export const Feed: React.FC = () => {
     return state?.useUnifiedSearch || false;
   });
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   // Track feedback state at the start of each search to only filter papers that were already liked/passed
   const [feedbackAtSearchStart, setFeedbackAtSearchStart] = useState<{
     liked: string[];
@@ -315,7 +317,18 @@ export const Feed: React.FC = () => {
   // Handle clear button - only clear the input, don't reset search state
   const handleClear = () => {
     setUnifiedQuery('');
-    // Don't clear searchQuery or useUnifiedSearch - let user see results while typing new query
+    // Reset unified search mode
+    setUseUnifiedSearch(false);
+    setSearchQuery('');
+    setActiveSearch(null);
+  };
+
+  // Handle Enter key in search input
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleUnifiedSearch(e as any);
+    }
   };
   
   // Handle search and save profile
@@ -573,25 +586,23 @@ export const Feed: React.FC = () => {
           className="google-style-search-form"
           onSubmit={handleUnifiedSearch}
         >
-          <div className="google-search-box">
-            <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-            <input
-              type="text"
-              className="google-search-input"
-              value={unifiedQuery}
-              onChange={(e) => setUnifiedQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleUnifiedSearch(e as any);
-                }
-              }}
-              placeholder="Search papers..."
-              disabled={useUnifiedSearch && searchData.isFetching}
-            />
+          <div className="google-search-box-wrapper">
+            <div className="google-search-box">
+              <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="google-search-input"
+                value={unifiedQuery}
+                onChange={(e) => setUnifiedQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Search papers..."
+                disabled={useUnifiedSearch && searchData.isFetching}
+              />
+            </div>
           </div>
           
           <div className="google-search-buttons">
@@ -695,7 +706,10 @@ export const Feed: React.FC = () => {
               error?.message || 
               'Failed to fetch papers. Please check the console for details.'
             }
-            onRetry={useUnifiedSearch ? handleUnifiedSearch : handleSearch}
+            onRetry={useUnifiedSearch ? () => {
+              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+              handleUnifiedSearch(fakeEvent);
+            } : handleSearch}
           />
         )}
 

@@ -12,14 +12,18 @@
   animation: fadeIn 0.2s;
 }
 
+[data-theme='dark'] .folder-modal-backdrop {
+  background: rgba(0, 0, 0, 0.85);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
 .folder-modal {
-  background: #0f261b;
-  border: 2px solid #3b5245;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
@@ -27,6 +31,8 @@
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
 @keyframes slideUp {
@@ -45,19 +51,23 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #3b5245;
+  border-bottom: 1px solid var(--border-color);
+  transition: border-color 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .modal-header h2 {
-  color: #e5f2e9;
+  color: var(--text-primary);
   margin: 0;
   font-size: 1.5rem;
+  transition: color 0.3s ease;
 }
 
 .close-modal-btn {
   background: transparent;
   border: none;
-  color: #a7c8b2;
+  color: var(--text-secondary);
   font-size: 2rem;
   cursor: pointer;
   padding: 0;
@@ -72,13 +82,23 @@
 }
 
 .close-modal-btn:hover {
-  background: rgba(167, 200, 178, 0.1);
-  color: #e5f2e9;
+  background: var(--border-light);
+  color: var(--text-primary);
 }
 
 .modal-content {
   padding: 1.5rem;
   overflow-y: auto;
+  overflow-x: visible;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.folder-instruction {
+  color: var(--text-secondary);
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  transition: color 0.3s ease;
 }
 
 .folder-list {
@@ -88,37 +108,55 @@
   margin-bottom: 1rem;
   max-height: 300px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 0;
 }
 
 .no-folders-message {
-  color: #7ca28a;
+  color: var(--text-secondary);
   text-align: center;
   padding: 2rem;
   margin: 0;
+  transition: color 0.3s ease;
 }
 
 .folder-option {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: #133322;
-  border: 1px solid #3b5245;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: transparent;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .folder-option:hover {
-  background: #0b1c14;
-  border-color: #2dd4bf;
-  transform: translateX(4px);
+  border-color: var(--accent-color);
+  background: rgba(26, 92, 46, 0.05);
+  transform: translateX(2px);
+}
+
+[data-theme='dark'] .folder-option:hover {
+  background: rgba(26, 92, 46, 0.1);
 }
 
 .folder-icon {
-  font-size: 1.5rem;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: #5a8c6a;
+  transition: color 0.3s ease;
+}
+
+[data-theme='dark'] .folder-icon {
+  color: #6b9d7a;
 }
 
 .folder-info {
@@ -129,29 +167,33 @@
 }
 
 .folder-option-name {
-  color: #e5f2e9;
+  color: var(--text-primary);
   font-weight: 600;
+  font-size: 1.15rem;
+  transition: color 0.3s ease;
 }
 
 .folder-option-description {
-  color: #7ca28a;
-  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  transition: color 0.3s ease;
 }
 
 .create-folder-btn {
   width: 100%;
   padding: 0.75rem;
-  background: #2dd4bf;
-  color: #0b1c14;
+  background: var(--accent-color);
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .create-folder-btn:hover {
-  background: #14b8a6;
+  background: var(--accent-hover);
   transform: translateY(-1px);
 }
 
@@ -165,18 +207,19 @@
 .folder-description-input {
   width: 100%;
   padding: 0.75rem;
-  background: #133322;
-  border: 1px solid #3b5245;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #e5f2e9;
+  color: var(--text-primary);
   font-size: 1rem;
   font-family: inherit;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .folder-name-input:focus,
 .folder-description-input:focus {
   outline: none;
-  border-color: #4ade80;
+  border-color: var(--accent-color);
 }
 
 .folder-description-input {
@@ -201,26 +244,27 @@
 }
 
 .cancel-btn {
-  background: #3b5245;
-  color: #e5f2e9;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .cancel-btn:hover {
-  background: #4a6454;
+  background: var(--border-light);
 }
 
 .confirm-create-btn {
-  background: #4ade80;
-  color: #0b1c14;
+  background: var(--accent-color);
+  color: #ffffff;
 }
 
 .confirm-create-btn:hover:not(:disabled) {
-  background: #22c55e;
+  background: var(--accent-hover);
 }
 
 .confirm-create-btn:disabled {
-  background: #3b5245;
-  color: #7ca28a;
+  background: var(--bg-tertiary);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

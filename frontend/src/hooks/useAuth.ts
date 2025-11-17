@@ -10,6 +10,7 @@ export const useAuth = () => {
   });
 
   const isAuthenticated = authStatus?.authenticated ?? false;
+  const user = authStatus?.user ?? null;
 
   const login = () => {
     authApi.login();
@@ -22,6 +23,7 @@ export const useAuth = () => {
   return {
     isAuthenticated,
     isLoading,
+    user,
     login,
     logout,
   };
