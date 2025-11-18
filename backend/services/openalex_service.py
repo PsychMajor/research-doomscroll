@@ -390,9 +390,9 @@ class OpenAlexService:
                 except Exception as e:
                     print(f"⚠️  Error reconstructing abstract: {e}")
             
-            # Extract authors
+            # Extract authors (include all contributors)
             authors = []
-            for authorship in work.get("authorships", [])[:10]:  # Limit to first 10 authors
+            for authorship in work.get("authorships", []):
                 if not authorship:
                     continue
                 author_info = authorship.get("author") or {}

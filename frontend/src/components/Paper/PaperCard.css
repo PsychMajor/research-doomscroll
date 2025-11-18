@@ -28,15 +28,31 @@
   transition: color 0.3s ease;
 }
 
+.paper-authors-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.paper-authors-row > .paper-authors {
+  width: 100%;
+}
+
+.paper-authors-row > .paper-metadata-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .paper-authors {
   color: var(--text-secondary);
   font-size: 1.1rem;
-  margin-bottom: 1rem;
+  margin: 0;
   line-height: 1.6;
   transition: color 0.3s ease;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .paper-authors span {
@@ -44,9 +60,9 @@
 }
 
 .authors-toggle {
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  border: 1px solid var(--accent-color);
+  background: transparent;
+  color: var(--accent-color);
   border-radius: 999px;
   padding: 0.15rem 0.65rem;
   font-size: 0.95rem;
@@ -56,21 +72,33 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin: 0 0.35rem;
+  vertical-align: baseline;
 }
 
 .authors-toggle:hover {
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: var(--tldr-hover-bg);
+}
+
+.authors-metadata-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  display: inline-block;
+  margin: 0;
 }
 
 .paper-metadata {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   color: var(--text-secondary);
   font-size: 1.05rem;
-  margin-bottom: 1.25rem;
+  margin: 0;
   transition: color 0.3s ease;
+  gap: 0.35rem;
 }
 
 .paper-year {
@@ -78,6 +106,11 @@
 }
 
 .metadata-separator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  display: inline-block;
   margin: 0 0.5rem;
 }
 

@@ -171,23 +171,32 @@ export const PaperCard: React.FC<PaperCardProps> = ({
     );
   };
 
+  const hasMetadata = Boolean(paper.year || paper.venue);
+
   return (
     <div className="paper-card">
       {renderTitle()}
 
-      <div className="paper-authors">
-        {renderAuthors(paper.authors)}
-      </div>
+      <div className="paper-authors-row">
+        <div className="paper-authors">
+          {renderAuthors(paper.authors)}
+        </div>
 
-      <div className="paper-metadata">
-        {paper.year && (
-          <span className="paper-year">{paper.year}</span>
-        )}
-        {paper.venue && (
-          <>
-            {paper.year && <span className="metadata-separator"> </span>}
-            <span className="paper-venue">{paper.venue}</span>
-          </>
+        {hasMetadata && (
+          <div className="paper-metadata-wrapper">
+            <span className="authors-metadata-dot" aria-hidden="true"></span>
+            <div className="paper-metadata">
+              {paper.year && (
+                <span className="paper-year">{paper.year}</span>
+              )}
+              {paper.venue && (
+                <>
+                  {paper.year && <span className="metadata-separator" aria-hidden="true"></span>}
+                  <span className="paper-venue">{paper.venue}</span>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
