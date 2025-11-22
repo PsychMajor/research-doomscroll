@@ -11,7 +11,10 @@ import { LoadingSpinner } from '../components/Common/LoadingSpinner';
 import { ErrorMessage } from '../components/Common/ErrorMessage';
 import { FolderModal } from '../components/Folder/FolderModal';
 import { useFolders } from '../hooks/useFolders';
+import { useAutocomplete } from '../hooks/useAutocomplete';
+import { AutocompleteDropdown } from '../components/Search/AutocompleteDropdown';
 import type { Paper } from '../types/paper';
+import type { AutocompleteSuggestion } from '../api/autocomplete';
 import './Feed.css';
 
 const ROUTE = '/';
@@ -81,12 +84,54 @@ export const Feed: React.FC = () => {
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchBoxWrapperRef = useRef<HTMLDivElement>(null);
 
   // Track feedback state at the start of each search to only filter papers that were already liked/passed
   const [feedbackAtSearchStart, setFeedbackAtSearchStart] = useState<{
     liked: string[];
     disliked: string[];
   }>({ liked: [], disliked: [] });
+
+  // Autocomplete hook - only enabled when not actively searching
+  const autocomplete = useAutocomplete(
+    unifiedQuery,
+    (suggestion: AutocompleteSuggestion) => {
+      // When a suggestion is selected, update the search query and trigger search
+      setUnifiedQuery(suggestion.text);
+      // Close autocomplete dropdown
+      autocomplete.reset();
+      // Trigger search immediately
+      setSearchQuery(suggestion.text);
+      setUseUnifiedSearch(true);
+      setActiveSearch(null);
+      
+      // Save unified search state to cache
+      saveState({
+        unifiedSearchQuery: suggestion.text,
+        useUnifiedSearch: true,
+        activeSearch: null,
+      });
+      
+      // Scroll to first card after search
+      setTimeout(() => {
+        const firstCard = document.querySelector('.paper-card');
+        if (firstCard) {
+          const navBarHeight = 80;
+          const cardPosition = firstCard.getBoundingClientRect().top + window.pageYOffset;
+          const scrollPosition = cardPosition - navBarHeight - 20;
+          window.scrollTo({ top: Math.max(0, scrollPosition), behavior: 'smooth' });
+        }
+      }, 100);
+    },
+    {
+      debounceMs: 300,
+      minQueryLength: 2,
+      limit: 5, // Limit to top 5 suggestions
+      // Enable autocomplete when not actively showing search results
+      // i.e., when the current query doesn't match the active search query
+      enabled: true, // Always enable autocomplete for now - we'll filter in the hook
+    }
+  );
   
 
   // Always call both hooks (React rules - hooks must be called unconditionally)
@@ -325,10 +370,30 @@ export const Feed: React.FC = () => {
 
   // Handle Enter key in search input
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Don't handle Enter if autocomplete is open - let the dropdown handle it
+    if (autocomplete.showDropdown && autocomplete.highlightedIndex >= 0) {
+      return; // Let the dropdown handle Enter key
+    }
+    
     if (e.key === 'Enter') {
       e.preventDefault();
       handleUnifiedSearch(e as any);
+      // Close autocomplete when searching
+      autocomplete.reset();
     }
+  };
+
+  // Handle input change - update query and reset autocomplete highlight
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setUnifiedQuery(value);
+    autocomplete.setHighlightedIndex(-1); // Reset highlight on input change
+    console.log('🔍 Input changed:', {
+      value,
+      length: value.length,
+      enabled: !searchQuery || value !== searchQuery,
+      showDropdown: autocomplete.showDropdown,
+    });
   };
   
   // Handle search and save profile
@@ -586,7 +651,7 @@ export const Feed: React.FC = () => {
           className="google-style-search-form"
           onSubmit={handleUnifiedSearch}
         >
-          <div className="google-search-box-wrapper">
+          <div className="google-search-box-wrapper" ref={searchBoxWrapperRef}>
             <div className="google-search-box">
               <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -597,12 +662,48 @@ export const Feed: React.FC = () => {
                 type="text"
                 className="google-search-input"
                 value={unifiedQuery}
-                onChange={(e) => setUnifiedQuery(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  // Show dropdown when input is focused (if there are suggestions)
+                  if (autocomplete.suggestions.length > 0) {
+                    autocomplete.setHighlightedIndex(-1);
+                  }
+                  console.log('🔍 Search input focused:', {
+                    unifiedQuery,
+                    suggestionsCount: autocomplete.suggestions.length,
+                    showDropdown: autocomplete.showDropdown,
+                    isLoading: autocomplete.isLoading,
+                  });
+                }}
+                onBlur={(e) => {
+                  // Don't close dropdown if clicking on dropdown item
+                  const relatedTarget = e.relatedTarget as HTMLElement;
+                  if (relatedTarget && relatedTarget.closest('.autocomplete-dropdown')) {
+                    return;
+                  }
+                  // Delay closing to allow click events to fire
+                  setTimeout(() => {
+                    autocomplete.reset();
+                  }, 200);
+                }}
                 placeholder="Search papers..."
                 disabled={useUnifiedSearch && searchData.isFetching}
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-controls="autocomplete-dropdown"
               />
             </div>
+            <AutocompleteDropdown
+              suggestions={autocomplete.suggestions}
+              visible={autocomplete.showDropdown}
+              highlightedIndex={autocomplete.highlightedIndex}
+              onSelect={autocomplete.selectSuggestion}
+              onHighlightChange={autocomplete.setHighlightedIndex}
+              isLoading={autocomplete.isLoading}
+              showEmptyState={true}
+              query={unifiedQuery}
+            />
           </div>
           
           <div className="google-search-buttons">

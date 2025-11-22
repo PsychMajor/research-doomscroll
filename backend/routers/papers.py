@@ -184,16 +184,17 @@ async def search_papers_by_query(
     authors_list = parsed.get("authors", []) or []
     years_list = parsed.get("years", []) or []
     institutions_list = parsed.get("institutions", []) or []
+    journals_list = parsed.get("journals", []) or []
     
     # Log the parsed results for debugging
     print(f"🔍 GPT parsed query '{q}' -> JSON: {parsed}")
-    print(f"   Extracted: keywords={topics_list}, authors={authors_list}, years={years_list}, institutions={institutions_list}")
+    print(f"   Extracted: keywords={topics_list}, authors={authors_list}, years={years_list}, institutions={institutions_list}, journals={journals_list}")
     
     # Validate that at least one search criterion was extracted
-    if not topics_list and not authors_list and not years_list and not institutions_list:
+    if not topics_list and not authors_list and not years_list and not institutions_list and not journals_list:
         raise HTTPException(
             status_code=400,
-            detail="Could not extract keywords, authors, years, or institutions from query. Please try a different format."
+            detail="Could not extract keywords, authors, years, institutions, or journals from query. Please try a different format."
         )
     
     # Validate sort_by parameter
@@ -211,6 +212,7 @@ async def search_papers_by_query(
             authors=authors_list,
             years=years_list,
             institutions=institutions_list,
+            journals=journals_list,
             sort_by=sort_by,
             page=page,
             per_page=per_page
@@ -240,6 +242,7 @@ async def search_papers_by_query(
                     authors=authors_list,
                     years=years_list,
                     institutions=institutions_list,
+                    journals=journals_list,
                     sort_by=sort_by,
                     page=page,
                     per_page=per_page

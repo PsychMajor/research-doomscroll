@@ -105,7 +105,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 # Import and include routers
-from .routers import papers, profile, feedback, folders, auth, analytics, proxy
+from .routers import papers, profile, feedback, folders, auth, analytics, proxy, autocomplete
 
 # Include API routers
 app.include_router(papers.router)
@@ -115,6 +115,7 @@ app.include_router(folders.router)
 app.include_router(auth.router)
 app.include_router(analytics.router)
 app.include_router(proxy.router)
+app.include_router(autocomplete.router)
 
 
 @app.get("/")

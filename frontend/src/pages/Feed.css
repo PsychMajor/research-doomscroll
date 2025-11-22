@@ -53,6 +53,7 @@
   position: relative;
   width: 100%;
   max-width: 584px;
+  z-index: 100; /* Ensure dropdown appears above other elements */
 }
 
 .google-search-box {

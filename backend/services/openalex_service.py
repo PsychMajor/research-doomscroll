@@ -16,6 +16,8 @@ class OpenAlexService:
     
     BASE_URL = "https://api.openalex.org/works"
     AUTHORS_URL = "https://api.openalex.org/authors"
+    INSTITUTIONS_URL = "https://api.openalex.org/institutions"
+    SOURCES_URL = "https://api.openalex.org/sources"
     
     def __init__(self):
         self.settings = get_settings()
@@ -27,6 +29,7 @@ class OpenAlexService:
         authors: List[str] = [],
         years: List[str] = [],
         institutions: List[str] = [],
+        journals: List[str] = [],
         sort_by: str = "recency",
         page: int = 1,
         per_page: int = 200
@@ -39,6 +42,7 @@ class OpenAlexService:
             authors: List of author names
             years: List of year filters (e.g., ["2020"], ["2020-2023"], [">2020"], ["<2023"])
             institutions: List of institution names
+            journals: List of journal/venue names
             sort_by: Sort order - "relevance" (citations) or "recency" (newest first)
             page: Page number
             per_page: Number of results per page (max 200)
@@ -70,6 +74,26 @@ class OpenAlexService:
                 print(f"   ✅ Found {len(author_ids)} author ID(s): {author_ids}")
             else:
                 print(f"   ⚠️ No author IDs found, will search by name instead")
+        
+        # Get institution IDs if institutions are provided
+        institution_ids = []
+        if institutions:
+            print(f"🔍 Looking up institution IDs for {len(institutions)} institution(s): {institutions}")
+            institution_ids = await self._get_institution_ids(institutions)
+            if institution_ids:
+                print(f"   ✅ Found {len(institution_ids)} institution ID(s): {institution_ids}")
+            else:
+                print(f"   ⚠️ No institution IDs found, will skip institution filtering")
+        
+        # Get journal/source IDs if journals are provided
+        journal_ids = []
+        if journals:
+            print(f"🔍 Looking up journal/source IDs for {len(journals)} journal(s): {journals}")
+            journal_ids = await self._get_source_ids(journals)
+            if journal_ids:
+                print(f"   ✅ Found {len(journal_ids)} journal ID(s): {journal_ids}")
+            else:
+                print(f"   ⚠️ No journal IDs found, will skip journal filtering")
         
         # Strategy: Use search parameter if no author filters, otherwise use only filters
         if author_ids:
@@ -125,33 +149,33 @@ class OpenAlexService:
             elif len(year_filters) == 1:
                 filters.append(f"publication_year:{year_filters[0]}")
         
-        # Add institution filters
-        if institutions:
-            # For institutions, we'll search by display name since looking up IDs is complex
-            # OpenAlex supports: institutions.display_name.search:MIT
-            inst_filters = []
-            for inst in institutions:
-                # Clean institution name
-                inst_clean = inst.strip()
-                if inst_clean:
-                    inst_filters.append(f'institutions.display_name.search:"{inst_clean}"')
-            
-            if inst_filters:
-                # For multiple institutions, use OR (pipe)
-                if len(inst_filters) == 1:
-                    filters.append(inst_filters[0])
-                else:
-                    # Combine institution names with OR
-                    inst_names = [f.split('"')[1] for f in inst_filters]
-                    inst_filter_str = "|".join(inst_names)
-                    filters.append(f'institutions.display_name.search:"{inst_filter_str}"')
+        # Add institution filters (using institution IDs)
+        if institution_ids:
+            # Institutions are nested under authorships in OpenAlex
+            # Use authorships.institutions.id filter
+            if len(institution_ids) == 1:
+                filters.append(f"authorships.institutions.id:{institution_ids[0]}")
+            else:
+                # Multiple institutions - use OR syntax with pipe
+                inst_ids_str = "|".join(institution_ids)
+                filters.append(f"authorships.institutions.id:{inst_ids_str}")
+        
+        # Add journal/venue filters (using source IDs)
+        if journal_ids:
+            # Journals are filtered by source.id in OpenAlex
+            if len(journal_ids) == 1:
+                filters.append(f"primary_location.source.id:{journal_ids[0]}")
+            else:
+                # Multiple journals - use OR syntax with pipe
+                journal_ids_str = "|".join(journal_ids)
+                filters.append(f"primary_location.source.id:{journal_ids_str}")
         
         # Add filters to params (comma means AND in OpenAlex)
         if filters:
             params["filter"] = ",".join(filters)
         
         try:
-            print(f"🔍 Fetching from OpenAlex: page={page}, topics={topics}, authors={authors}, years={years}, institutions={institutions}, sort={sort_by}")
+            print(f"🔍 Fetching from OpenAlex: page={page}, topics={topics}, authors={authors}, years={years}, institutions={institutions}, journals={journals}, sort={sort_by}")
             print(f"   Search: {params.get('search', 'N/A')}")
             print(f"   Filter: {params.get('filter', 'N/A')}")
             
@@ -350,6 +374,84 @@ class OpenAlexService:
                     print(f"   ⚠️ Could not find author ID for '{name}': {e}")
         
         return author_ids
+    
+    async def _get_institution_ids(self, institution_names: List[str]) -> List[str]:
+        """
+        Query OpenAlex institutions endpoint to get institution IDs from names
+        
+        Args:
+            institution_names: List of institution names to search for
+        
+        Returns:
+            List of OpenAlex institution IDs
+        """
+        institution_ids = []
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for name in institution_names:
+                try:
+                    params = {
+                        "mailto": self.email,
+                        "search": name,
+                        "per_page": 1  # Just get the top match
+                    }
+                    
+                    response = await client.get(self.INSTITUTIONS_URL, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    results = data.get("results", [])
+                    if results:
+                        # Get the OpenAlex ID (format: https://openalex.org/I1234567890)
+                        institution_id = results[0].get("id", "")
+                        if institution_id:
+                            # Extract just the ID part (I1234567890)
+                            institution_id = institution_id.split("/")[-1]
+                            institution_ids.append(institution_id)
+                            print(f"   Found institution: {results[0].get('display_name')} -> {institution_id}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not find institution ID for '{name}': {e}")
+        
+        return institution_ids
+    
+    async def _get_source_ids(self, source_names: List[str]) -> List[str]:
+        """
+        Query OpenAlex sources endpoint to get source/journal IDs from names
+        
+        Args:
+            source_names: List of journal/source names to search for
+        
+        Returns:
+            List of OpenAlex source IDs
+        """
+        source_ids = []
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for name in source_names:
+                try:
+                    params = {
+                        "mailto": self.email,
+                        "search": name,
+                        "per_page": 1  # Just get the top match
+                    }
+                    
+                    response = await client.get(self.SOURCES_URL, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    results = data.get("results", [])
+                    if results:
+                        # Get the OpenAlex ID (format: https://openalex.org/S1234567890)
+                        source_id = results[0].get("id", "")
+                        if source_id:
+                            # Extract just the ID part (S1234567890)
+                            source_id = source_id.split("/")[-1]
+                            source_ids.append(source_id)
+                            print(f"   Found source/journal: {results[0].get('display_name')} -> {source_id}")
+                except Exception as e:
+                    print(f"   ⚠️ Could not find source ID for '{name}': {e}")
+        
+        return source_ids
     
     def _transform_work_to_paper(self, work: Dict[str, Any]) -> Optional[Paper]:
         """

@@ -118,6 +118,10 @@
   color: var(--text-secondary);
 }
 
+.paper-citation-count {
+  color: var(--text-secondary);
+}
+
 .paper-tldr {
   margin-bottom: 1.25rem;
   padding: 1rem 1.25rem;

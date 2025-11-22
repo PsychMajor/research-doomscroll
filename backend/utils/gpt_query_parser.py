@@ -21,20 +21,20 @@ def parse_search_query_with_gpt(query: str, api_key: Optional[str] = None) -> Di
         api_key: OpenAI API key (if None, will try to get from OPENAI_API_KEY env var)
         
     Returns:
-        Dictionary with 'keywords', 'authors', 'years', and 'institutions' lists
+        Dictionary with 'keywords', 'authors', 'years', 'institutions', and 'journals' lists
     """
     if not query or not query.strip():
-        return {"keywords": [], "authors": [], "years": [], "institutions": []}
+        return {"keywords": [], "authors": [], "years": [], "institutions": [], "journals": []}
     
     if not OPENAI_AVAILABLE:
         print("⚠️ OpenAI library not available. Install with: pip install openai")
-        return {"keywords": [], "authors": [], "years": [], "institutions": []}
+        return {"keywords": [], "authors": [], "years": [], "institutions": [], "journals": []}
     
     # Get API key from parameter or environment
     api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         print("⚠️ OPENAI_API_KEY not set. Cannot use GPT parser.")
-        return {"keywords": [], "authors": [], "years": [], "institutions": []}
+        return {"keywords": [], "authors": [], "years": [], "institutions": [], "journals": []}
     
     try:
         client = OpenAI(api_key=api_key)
@@ -47,13 +47,15 @@ Extract the following entities from the user's query:
 2. **Authors**: Person names (e.g., "John Smith", "Michael J. Iadarola")
 3. **Years**: Publication years, year ranges, or relative years (e.g., "2020", "2020-2023", ">2020", "after 2020")
 4. **Institutions**: Universities, research institutions, or organizations (e.g., "MIT", "Stanford University", "Harvard")
+5. **Journals**: Journal names, publication venues, or sources (e.g., "Nature", "Science", "Cell", "The Journal of Neuroscience")
 
 Return ONLY a valid JSON object with this exact structure:
 {
   "keywords": ["keyword1", "keyword2"],
   "authors": ["Author Name"],
   "years": ["2020"],
-  "institutions": ["Institution Name"]
+  "institutions": ["Institution Name"],
+  "journals": ["Journal Name"]
 }
 
 Rules:
@@ -64,6 +66,8 @@ Rules:
 - Normalize author names to proper case (e.g., "john smith" -> "John Smith")
 - Only include institutions that are clearly academic/research institutions
 - Keywords should be meaningful research terms, not common words like "papers" or "research"
+- For journals, extract full journal names (e.g., "Nature", "Science", "Cell", "The Journal of Neuroscience")
+- Journal names should be normalized to their common publication names
 """
 
         user_prompt = f"Extract entities from this search query: {query}"
@@ -88,7 +92,8 @@ Rules:
             "keywords": parsed.get("keywords", []),
             "authors": parsed.get("authors", []),
             "years": parsed.get("years", []),
-            "institutions": parsed.get("institutions", [])
+            "institutions": parsed.get("institutions", []),
+            "journals": parsed.get("journals", [])
         }
         
         # Filter out empty strings and normalize
@@ -96,6 +101,7 @@ Rules:
         result["authors"] = [a.strip() for a in result["authors"] if a and a.strip()]
         result["years"] = [str(y).strip() for y in result["years"] if y and str(y).strip()]
         result["institutions"] = [i.strip() for i in result["institutions"] if i and i.strip()]
+        result["journals"] = [j.strip() for j in result["journals"] if j and j.strip()]
         
         return result
         
@@ -103,10 +109,10 @@ Rules:
         print(f"⚠️ Error parsing GPT response as JSON: {e}")
         if 'content' in locals():
             print(f"   Response was: {content}")
-        return {"keywords": [], "authors": [], "years": [], "institutions": []}
+        return {"keywords": [], "authors": [], "years": [], "institutions": [], "journals": []}
     except Exception as e:
         print(f"⚠️ Error calling GPT API: {e}")
         import traceback
         traceback.print_exc()
-        return {"keywords": [], "authors": [], "years": [], "institutions": []}
+        return {"keywords": [], "authors": [], "years": [], "institutions": [], "journals": []}
 
