@@ -1,0 +1,218 @@
+.entity-search {
+  max-width: 600px;
+  width: calc(100% - 3rem);
+  margin: 0 auto 0 auto;
+  padding: 1.5rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.entity-search-header {
+  margin-bottom: 1.5rem;
+}
+
+.entity-type-selector {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.type-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+.type-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+  box-shadow: 0 2px 4px var(--shadow);
+}
+
+.type-btn.active {
+  background: var(--bg-secondary);
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+.entity-search-input-wrapper {
+  position: relative;
+  margin-bottom: 0;
+  z-index: 10;
+  width: 100%;
+  max-width: 100%;
+}
+
+.entity-search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.entity-search-icon {
+  position: absolute;
+  left: 1.25rem;
+  color: var(--text-secondary);
+  z-index: 1;
+  pointer-events: none;
+  width: 20px;
+  height: 20px;
+}
+
+.entity-search-input {
+  width: 100%;
+  padding: 1rem 1.25rem 1rem 3.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px 1px rgba(0, 0, 0, 0.1);
+}
+
+.entity-search-input:hover {
+  box-shadow: 0 2px 8px 1px rgba(0, 0, 0, 0.15);
+}
+
+.entity-search-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 8px 1px rgba(0, 0, 0, 0.2);
+}
+
+.entity-search-loading {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+}
+
+.entity-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  padding: 0.5rem;
+}
+
+.entity-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.entity-result-item:hover {
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 4px var(--shadow);
+}
+
+.entity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.entity-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  word-wrap: break-word;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entity-type-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.entity-meta {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.entity-works-count {
+  color: var(--text-tertiary);
+}
+
+.follow-btn {
+  padding: 0.5rem 1.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  color: var(--accent-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  margin-left: 1rem;
+}
+
+.follow-btn:hover:not(:disabled) {
+  background: var(--accent-color);
+  color: white;
+}
+
+.follow-btn.following {
+  background: var(--accent-color);
+  color: white;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.follow-btn:disabled {
+  cursor: not-allowed;
+}
+
+.entity-search-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+

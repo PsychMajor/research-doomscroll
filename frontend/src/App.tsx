@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Feed } from './pages/Feed';
+import { Home } from './pages/Home';
 import { Likes } from './pages/Likes';
 import { Folders } from './pages/Folders';
 import { FolderDetail } from './pages/FolderDetail';
@@ -26,9 +27,16 @@ function AppContent() {
       <header className="app-header">
         <nav className="header-nav">
           <Link 
-            to="/" 
-            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            to="/search" 
+            className={`nav-link ${location.pathname === '/search' ? 'active' : ''}`}
+            onClick={(e) => {
+              // If already on search page, scroll to top
+              if (location.pathname === '/search') {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+              // Otherwise, let navigation happen and restore scroll position
+            }}
             aria-label="Search"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,8 +54,8 @@ function AppContent() {
             </svg>
           </Link>
           <Link 
-            to="/" 
-            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
+            to="/home" 
+            className={`nav-link ${location.pathname === '/home' ? 'active' : ''}`}
             aria-label="Home"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -90,11 +98,13 @@ function AppContent() {
       <div className="app">
         <main className="app-main">
           <Routes>
-            <Route path="/" element={<Feed />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/search" element={<Feed />} />
             <Route path="/likes" element={<Likes />} />
             <Route path="/folders" element={<Folders />} />
             <Route path="/folders/:folderId" element={<FolderDetail />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </main>
       </div>

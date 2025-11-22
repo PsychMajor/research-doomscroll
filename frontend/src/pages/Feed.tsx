@@ -160,7 +160,7 @@ export const Feed: React.FC = () => {
   // Restore scroll position immediately on mount (before paint)
   // useLayoutEffect runs synchronously before browser paints, preventing visible jump
   useLayoutEffect(() => {
-    if (location.pathname === ROUTE) {
+    if (location.pathname === '/search' || location.pathname === ROUTE) {
       const savedPosition = getScrollPosition(ROUTE);
       if (savedPosition !== null && savedPosition > 0) {
         // Restore immediately to prevent visible jump
@@ -171,7 +171,7 @@ export const Feed: React.FC = () => {
 
   // Also restore after data loads to handle cases where content height changes
   useEffect(() => {
-    if (location.pathname === ROUTE && data && data.pages.length > 0) {
+    if ((location.pathname === '/search' || location.pathname === ROUTE) && data && data.pages.length > 0) {
       const savedPosition = getScrollPosition(ROUTE);
       if (savedPosition !== null && savedPosition > 0) {
         // Use a small delay to ensure DOM is fully rendered
@@ -184,9 +184,9 @@ export const Feed: React.FC = () => {
     }
   }, [location.pathname, data]);
 
-  // Setup scroll listener to save position
+  // Setup scroll listener to save position (for both /search and /)
   useEffect(() => {
-    if (location.pathname === ROUTE) {
+    if (location.pathname === '/search' || location.pathname === ROUTE) {
       const cleanup = setupScrollListener(ROUTE);
       return cleanup;
     }

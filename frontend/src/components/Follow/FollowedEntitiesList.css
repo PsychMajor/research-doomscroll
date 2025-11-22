@@ -1,0 +1,100 @@
+.followed-entities-list {
+  max-width: 600px;
+  width: calc(100% - 3rem);
+  margin: 1.5rem auto 2.5rem auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.follow-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent-color);
+  border: 1px solid var(--accent-color);
+  border-radius: 20px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px var(--shadow);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.follow-bubble:hover {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 4px var(--shadow);
+  opacity: 0.9;
+}
+
+.follow-bubble-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: white;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0;
+}
+
+.follow-bubble-category {
+  font-weight: 700;
+}
+
+.follow-bubble-unfollow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.follow-bubble-unfollow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  transform: scale(1.1);
+}
+
+.follow-bubble-unfollow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading,
+.empty-state {
+  padding: 1rem 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+.empty-state p {
+  margin: 0.25rem 0;
+}
+
+.empty-state .hint {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
